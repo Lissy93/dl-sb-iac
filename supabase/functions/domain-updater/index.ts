@@ -47,19 +47,79 @@ function areDatesEqual(date1: string | null, date2: string | null): boolean {
   return new Date(date1).toISOString().slice(0, 10) === new Date(date2).toISOString().slice(0, 10);
 }
 
-// Record domain change in the `domain_updates` table
+// Mapping for changeType to notification_type
+const changeTypeToNotificationType: Record<string, string> = {
+  registrar: 'registrar',
+  whois_organization: 'whois_',
+  dns_ns: 'dns_',
+  dns_txt: 'dns_',
+  dns_mx: 'dns_',
+  ip_ipv4: 'ip_',
+  ip_ipv6: 'ip_',
+  ssl_issuer: 'ssl_issuer',
+  host: 'host',
+  status: 'status',
+};
+
+// Function to check notification preferences and insert notification if enabled
+async function checkAndInsertNotification(domainId: string, userId: string, changeType: string, field: string, oldValue: any, newValue: any) {
+  // Map changeType to the relevant notification type
+  const notificationType = changeTypeToNotificationType[field];
+  
+  if (!notificationType) {
+    console.warn(`No matching notification type found for changeType "${field}"`);
+    return;
+  }
+
+  // Check if the notification type is enabled for this domain
+  const { data: preference, error } = await supabase
+    .from('notification_preferences')
+    .select('is_enabled')
+    .eq('domain_id', domainId)
+    .eq('notification_type', notificationType)
+    .single();
+
+  if (error) {
+    console.error(`Error checking notification preference for type "${notificationType}": ${error.message}`);
+    return;
+  }
+
+  // If the notification is enabled, insert a new notification into the notifications table
+  if (preference?.is_enabled) {
+    const message = `The ${field} for your domain has changed from "${oldValue}" to "${newValue}".`;
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      domain_id: domainId,
+      change_type: field,
+      message: message,
+      sent: false,
+      read: false,
+    });
+  }
+}
+
+// Function to record domain change and trigger notification if applicable
 async function recordDomainChange(domainId: string, userId: string, changeType: string, field: string, oldValue: any, newValue: any) {
-  changeCount++;
-  console.log(`Change ${changeCount}: ${changeType} ${field} from ${oldValue} to ${newValue}`);
-  await supabase.from('domain_updates').insert({
-    domain_id: domainId,
-    user_id: userId,
-    change: field,
-    change_type: changeType,
-    old_value: oldValue,
-    new_value: newValue,
-    date: new Date(),
-  });
+  try {
+    console.log(`Domain "${domainId}" "${changeType}" "${field}" from "${oldValue}" to "${newValue}"`);
+    changeCount++;
+
+    // Insert domain change into domain_updates
+    await supabase.from('domain_updates').insert({
+      domain_id: domainId,
+      user_id: userId,
+      change: field,
+      change_type: changeType,
+      old_value: oldValue,
+      new_value: newValue,
+      date: new Date(),
+    });
+
+    // Call function to check notification preference and insert notification if enabled
+    await checkAndInsertNotification(domainId, userId, changeType, field, oldValue, newValue);
+  } catch (error) {
+    console.error(`Error recording domain change: ${error.message}`);
+  }
 }
 
 // Case-insensitive comparison for string values
