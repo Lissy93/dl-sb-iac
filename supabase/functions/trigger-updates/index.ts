@@ -4,7 +4,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 // Keys
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const DB_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const DOMAIN_UPDATER_URL = 'https://svrtyblfdhowviyowxwt.supabase.co/functions/v1/domain-updater'; // Your existing domain updater URL
+const DOMAIN_UPDATER_URL = 'https://svrtyblfdhowviyowxwt.supabase.co/functions/v1/domain-updater';
 
 // Initialize Supabase client with superuser privileges to bypass RLS
 const supabase = createClient(

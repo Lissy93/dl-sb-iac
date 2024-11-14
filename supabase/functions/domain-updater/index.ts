@@ -100,6 +100,8 @@ async function checkAndInsertNotification(domainId: string, userId: string, chan
 
 // Function to record domain change and trigger notification if applicable
 async function recordDomainChange(domainId: string, userId: string, changeType: string, field: string, oldValue: any, newValue: any) {
+  if (newValue === 'Unknown') return;
+  if ((oldValue || '').toLowerCase() === (newValue || '').toLowerCase()) return;
   try {
     console.log(`Domain "${domainId}" "${changeType}" "${field}" from "${oldValue}" to "${newValue}"`);
     changeCount++;
@@ -197,7 +199,7 @@ async function updateDomainData(domainId: string, userId: string, domainInfo: an
     // 4. IP Addresses
     const ipVersions = ['ipv4', 'ipv6'];
     for (const version of ipVersions) {
-      const newIps = domainInfo.ipAddresses[version].map(ip => ip.toLowerCase());
+      const newIps = domainInfo.ipAddresses[version].map((ip: string) => ip.toLowerCase());
       const { data: currentIps } = await supabase.from('ip_addresses').select('*').eq('domain_id', domainId).eq('is_ipv6', version === 'ipv6');
 
       const addedIps = newIps.filter(ip => !currentIps.some(cip => cip.ip_address.toLowerCase() === ip));
@@ -245,19 +247,22 @@ async function updateDomainData(domainId: string, userId: string, domainInfo: an
     }
 
     // 6. Status Codes
-    const newStatuses = domainInfo.status.map(s => s.toLowerCase());
-    const { data: currentStatuses } = await supabase.from('domain_statuses').select('*').eq('domain_id', domainId);
+    const newStatuses = domainInfo.status.map((s: string) => s.toLowerCase());
 
-    const addedStatuses = newStatuses.filter(s => !currentStatuses.some(cs => cs.status_code.toLowerCase() === s));
-    const removedStatuses = currentStatuses.filter(cs => !newStatuses.includes(cs.status_code.toLowerCase()));
+    if (!newStatuses || !newStatuses.length) {
+      const { data: currentStatuses } = await supabase.from('domain_statuses').select('*').eq('domain_id', domainId);
 
-    for (const added of addedStatuses) {
-      await recordDomainChange(domainId, userId, 'added', 'status', null, added);
-      await supabase.from('domain_statuses').insert({ domain_id: domainId, status_code: added });
-    }
-    for (const removed of removedStatuses) {
-      await recordDomainChange(domainId, userId, 'removed', 'status', removed.status_code, null);
-      await supabase.from('domain_statuses').delete().eq('id', removed.id);
+      const addedStatuses = newStatuses.filter((s: string) => !currentStatuses.some((cs: any) => cs.status_code.toLowerCase() === s));
+      const removedStatuses = currentStatuses.filter((cs: { status_code: string; }) => !newStatuses.includes(cs.status_code.toLowerCase()));
+  
+      for (const added of addedStatuses) {
+        await recordDomainChange(domainId, userId, 'added', 'status', null, added);
+        await supabase.from('domain_statuses').insert({ domain_id: domainId, status_code: added });
+      }
+      for (const removed of removedStatuses) {
+        await recordDomainChange(domainId, userId, 'removed', 'status', removed.status_code, null);
+        await supabase.from('domain_statuses').delete().eq('id', removed.id);
+      }
     }
 
     // 7. Dates
@@ -270,7 +275,7 @@ async function updateDomainData(domainId: string, userId: string, domainInfo: an
       await supabase.from('domains').update({ updated_date: domainInfo.dates.updated }).eq('id', domainId);
     }
   } catch (error) {
-    console.error(`Error updating domain data: ${error.message}`);
+    console.error(`Error updating domain data: ${(error as Error).message}`);
   }
 }
 
@@ -309,6 +314,7 @@ serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(error.message, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(errorMessage, { status: 500 });
   }
 });
