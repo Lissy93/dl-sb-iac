@@ -61,6 +61,21 @@ const changeTypeToNotificationType: Record<string, string> = {
   status: 'status',
 };
 
+// Mapping for field names to human-readable names
+const fieldToHumanName: Record<string, string> = {
+  registrar: 'Registrar',
+  whois_organization: 'WHOIS Organization',
+  dns_ns: 'Nameserver',
+  dns_txt: 'TXT Record',
+  dns_mx: 'MX Record',
+  ip_ipv4: 'IPv4 Address',
+  ip_ipv6: 'IPv6 Address',
+  ssl_issuer: 'SSL Issuer',
+  dates_expiry: 'Expiry Date',
+  dates_updated: 'Last Update Date',
+  status: 'Domain Status'
+};
+
 // Function to check notification preferences and insert notification if enabled
 async function checkAndInsertNotification(domainId: string, userId: string, changeType: string, field: string, oldValue: any, newValue: any) {
   // Map changeType to the relevant notification type
@@ -86,7 +101,16 @@ async function checkAndInsertNotification(domainId: string, userId: string, chan
 
   // If the notification is enabled, insert a new notification into the notifications table
   if (preference?.is_enabled) {
-    const message = `The ${field} for your domain has changed from "${oldValue}" to "${newValue}".`;
+    const humanFieldName = fieldToHumanName[field] || field;
+    let message;
+    if (oldValue === null || oldValue === 'Unknown') {
+      message = `${humanFieldName} was added "${newValue}"`;
+    } else if (newValue === null || newValue === 'Unknown') {
+      message = `${humanFieldName} was removed "${oldValue}"`;
+    } else {
+      message = `The ${humanFieldName} for your domain has changed from "${oldValue}" to "${newValue}".`;
+    }
+
     await supabase.from('notifications').insert({
       user_id: userId,
       domain_id: domainId,

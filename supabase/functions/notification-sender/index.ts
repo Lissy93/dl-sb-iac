@@ -20,15 +20,18 @@ serve(async (req) => {
     // Handle both webhook and manual triggers
     let userId: string;
     let message: string;
+    let url: string | undefined;
     
     if (body.type === 'INSERT' && body.record?.new) {
       // This is a database webhook trigger from notifications table
       userId = body.record.new.user_id;
       message = body.record.new.message;
+      url = body.record.new.url?.trim();  // Trim any whitespace
     } else {
       // This is a manual trigger with direct payload
       userId = body.userId;
       message = body.message;
+      url = body.url?.trim();  // Trim any whitespace
     }
 
     if (!userId || !message) {
@@ -36,6 +39,11 @@ serve(async (req) => {
         JSON.stringify({ error: 'userId and message are required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // If URL is provided, ensure it starts with http/https
+    if (url) {
+      url = url.startsWith('http') ? url : `https://${url}`;
     }
 
     // TODO: Add your notification sending logic here
@@ -50,7 +58,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, userId, message }),
+      JSON.stringify({ success: true, userId, message, url }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {

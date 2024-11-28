@@ -1,6 +1,3 @@
-
-
-
 // Step 1: Read the userId and message from the input body
 // Step 2: Fetch and parse user's notification preferences from the notification_channels field user_info table
 // Step 3: If no notification preferences, fetch user's email from `Email` col of `users` table, and set preferences to email only
@@ -19,27 +16,38 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const DB_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const DB_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+import { NotificationPreferences } from "./types.ts";
+import { sendWebHookNotification } from "./senders/webhook.ts";
+
+const DB_URL = Deno.env.get('DB_URL') ?? '';
+const DB_KEY = Deno.env.get('DB_KEY') ?? '';
 
 // Function entry point
 Deno.serve(async (req) => {
 
-  const supabase = createClient(
-    DB_URL,
-    DB_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    }
-  );
+  const supabase = createClient(DB_URL, DB_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
 
   try {
     // Step 1: Read userId and message from the input body
-    const { userId, message } = await req.json();
+    const body = await req.json();
+    let userId: string;
+    let message: string;
+    
+    if (body.type === 'INSERT' && body.record?.new) {
+      // This is a database webhook trigger from notifications table
+      userId = body.record.new.user_id;
+      message = body.record.new.message;
+    } else {
+      // This is a manual trigger with direct payload
+      userId = body.userId;
+      message = body.message;
+    }
 
     if (!userId || !message) {
       return new Response(
@@ -50,9 +58,9 @@ Deno.serve(async (req) => {
 
     // Step 2: Fetch user's notification preferences
     const { data, error } = await supabase
-      .from("user_info")
-      .select("notification_channels")
-      .eq("user_id", userId)
+      .from('user_info')
+      .select('notification_channels')  
+      .eq('user_id', userId)
       .single();
 
     if (error || !data) {
@@ -63,7 +71,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const notificationChannels = data.notification_channels;
+    const notificationChannels = data.notification_channels as NotificationPreferences;
 
     // Step 3: For each enabled channel, send the message using the corresponding channel function
     if (notificationChannels.email?.enabled) {
@@ -115,12 +123,6 @@ async function sendEmailNotification(config: any, message: string) {
 async function sendPushNotification(config: any, message: string) {
   console.log(`Sending push notification: ${message}`);
   // Implement actual push notification logic here
-}
-
-// Placeholder function for sending web hook notifications
-async function sendWebHookNotification(config: any, message: string) {
-  console.log(`Sending web hook to ${config.url} with provider ${config.provider}: ${message}`);
-  // Implement actual web hook sending logic here
 }
 
 // Placeholder function for sending Signal notifications
