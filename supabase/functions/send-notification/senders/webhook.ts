@@ -17,7 +17,6 @@ export async function sendWebHookNotification(config: WebHookConfig, message: st
         if (!config.topic) throw new Error("Ntfy requires a topic.");
         url = `${url}/${config.topic}`;
         payload = message;
-        console.log(payload);
         break;
 
       case "gotify":
