@@ -8,8 +8,12 @@ import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Keys
-const DB_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const DB_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
+const DB_KEY = Deno.env.get('DB_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+if (!DB_URL || !DB_KEY) {
+  throw new Error('Database URL and Key must be provided.');
+}
 const DOMAIN_UPDATER_URL = 'https://svrtyblfdhowviyowxwt.supabase.co/functions/v1/domain-updater';
 
 // Initialize Supabase client with superuser privileges to bypass RLS
@@ -36,11 +40,16 @@ async function updateDomainForUser(domain: string, userId: string) {
       body: JSON.stringify({ domain, user_id: userId }),
     });
 
-    if (!response.ok) {
-      console.error(`Failed to update domain ${domain} for user ${userId}: ${response.statusText}`);
+    // Logging the response
+    const responseBody = await response.json();
+    console.info(responseBody.message);
+    if (responseBody.error) {
+      console.error('❌', responseBody.error);
+    } else if (!response.ok) {
+      console.error('❌', response.statusText);
     }
   } catch (error) {
-    console.error(`Error calling domain updater for ${domain}: ${(error as Error).message}`);
+    console.error('❌', (error as Error).message);
   }
 }
 

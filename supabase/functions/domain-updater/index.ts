@@ -8,8 +8,10 @@
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const DB_URL = Deno.env.get('DB_URL') ?? '';
-const DB_KEY = Deno.env.get('DB_KEY') ?? '';
+// Keys
+const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
+const DB_KEY = Deno.env.get('DB_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
 const AS93_DOMAIN_INFO_URL = Deno.env.get('AS93_DOMAIN_INFO_URL') ?? '';
 const AS93_DOMAIN_INFO_KEY = Deno.env.get('AS93_DOMAIN_INFO_KEY') ?? '';
 
@@ -314,7 +316,17 @@ async function updateDomainData(domainId: string, userId: string, domainInfo: an
 serve(async (req) => {
   const { domain, user_id } = await req.json();
   if (!domain || !user_id) {
-    return new Response('Domain and user_id are required', { status: 400 });
+    return new Response(JSON.stringify({ message: '❌ Domain could not be updated', error: 'Missing params, domain and/or user_id' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  
+  if (!DB_URL || !DB_KEY) {
+    return new Response(JSON.stringify({ message: `❌ ${domain} could not be updated`, error: 'Missing DB URL and/or KEY' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -340,12 +352,15 @@ serve(async (req) => {
 
     await updateDomainData(domainRecord.id, user_id, domainInfo, domainRecord);
 
-    return new Response(JSON.stringify({ message: 'Domain updated successfully', fieldsUpdated: changeCount }), {
+    return new Response(JSON.stringify({ message: `✅ ${domain} updates successfully: ${changeCount} changes.` }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(errorMessage, { status: 500 });
+    return new Response(JSON.stringify({ message: `⚠️ ${domain} could not be updated`, error: errorMessage }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 });
