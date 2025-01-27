@@ -1,3 +1,9 @@
+/**
+ * Runs as a cron
+ * Fetches all domains and users
+ * Then calls the domain-updater function for eligible each domain.
+ */
+
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -34,7 +40,7 @@ async function updateDomainForUser(domain: string, userId: string) {
       console.error(`Failed to update domain ${domain} for user ${userId}: ${response.statusText}`);
     }
   } catch (error) {
-    console.error(`Error calling domain updater for ${domain}: ${error.message}`);
+    console.error(`Error calling domain updater for ${domain}: ${(error as Error).message}`);
   }
 }
 
@@ -63,7 +69,7 @@ serve(async () => {
   try {
     return await processAllDomains();
   } catch (error) {
-    console.error('Unexpected error:', error.message);
+    console.error('Unexpected error:', (error as Error).message);
     return new Response('Internal Server Error', { status: 500 });
   }
 });

@@ -7,7 +7,13 @@ const DB_KEY = Deno.env.get('DB_KEY') ?? '';
 const TIMEOUT = 5000; // Timeout in milliseconds
 
 // Initialize Supabase client
-const supabase = createClient(DB_URL, DB_KEY);
+const supabase = createClient(DB_URL, DB_KEY, {
+  global: {
+    headers: {
+      Authorization: `Bearer ${DB_KEY}`,
+    },
+  },
+});
 
 // TypeScript interfaces
 interface Domain {

@@ -1,3 +1,10 @@
+/**
+ * Triggered by the trigger-updates function, with a { domain, user_id } payload.
+ * For each domain, fetches the latest info from DO endpoint
+ * then compares it with the current domain info in the database,
+ * updating the database and triggering notifications if necessary.
+ */
+
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
