@@ -1,7 +1,8 @@
 /**
  * Runs as a cron
  * Fetches all domains and users
- * Then calls the domain-updater function for eligible each domain.
+ * Then calls the domain-updater function for eligible each domain
+ * Logs responses, and returns a summary response
  */
 
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
@@ -55,6 +56,8 @@ async function updateDomainForUser(domain: string, userId: string) {
 
 // Main function to fetch all domains and update each domain for its user
 async function processAllDomains() {
+  // Start time
+  const startTime = performance.now();
   // Fetch all user_id and domain_name pairs from the domains table
   const { data: domains, error } = await supabase
     .from('domains')
@@ -70,7 +73,10 @@ async function processAllDomains() {
     await updateDomainForUser(domain.domain_name, domain.user_id);
   }
 
-  return new Response('All domains processed successfully', { status: 200 });
+  const processedCount = domains.length;
+  const endTime = performance.now();
+  const duration = ((endTime - startTime) / 1000).toFixed(1);
+  return new Response(`✅ ${processedCount} domains processed successfully in ${duration} seconds`, { status: 200 });
 }
 
 // Supabase serverless function handler
