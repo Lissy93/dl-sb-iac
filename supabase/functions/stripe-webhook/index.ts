@@ -102,13 +102,13 @@ async function handleCheckoutCompleted(event: any) {
 async function handleSubscriptionUpdated(event: any) {
   const subscription = event.data.object as Stripe.Subscription
   const userId = getUserId(null, subscription)
-
+  const invoice = event.data.object as Stripe.Invoice
   if (!userId) {
     logError(`${event.type}: No user_id in subscription metadata`, { subscription })
     return
   }
 
-  await updateBillingRecord(userId, subscription)
+  await updateBillingRecord(userId, invoice)
   sendEmail(userId, 'subscription_updated')
 }
 
@@ -147,31 +147,56 @@ async function handleSubscriptionDeleted(event: any) {
 /**
  * Upserts a billing record in Supabase
  */
-async function updateBillingRecord(userId: string, subscription: Stripe.Subscription) {
-  if (!subscription.items || !subscription.items.data.length) {
-    logError('updateBillingRecord: No items found in subscription', { subscription })
+async function updateBillingRecord(userId: string, eventObject: any) {
+  let items = []
+
+  // 1️⃣ Check if the event object is an invoice
+  if (eventObject.object === 'invoice') {
+    if (eventObject.lines && eventObject.lines.data.length > 0) {
+      items = eventObject.lines.data
+    } else {
+      logError('updateBillingRecord: No items found in invoice', { eventObject })
+    }
+  }
+
+  // 2️⃣ Check if the event object is a subscription
+  if (eventObject.object === 'subscription') {
+    if (eventObject.items && eventObject.items.data.length > 0) {
+      items = eventObject.items.data
+    } else {
+      logError('updateBillingRecord: No items found in subscription', { eventObject })
+    }
+  }
+
+  // 3️⃣ If no items were found, log error and exit
+  if (items.length === 0) {
+    logError('updateBillingRecord: No valid items found for billing update', { eventObject })
     return
   }
 
-  const priceId = subscription.items.data[0]?.price?.id
+  // 4️⃣ Extract plan information from items
+  const priceId = items[0]?.price?.id
   const plan = PLAN_MAPPING[priceId] || 'free'
 
-  const nextPaymentDue = subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toISOString()
+  // 5️⃣ Get next payment due date (if applicable)
+  const nextPaymentDue = eventObject.current_period_end
+    ? new Date(eventObject.current_period_end * 1000).toISOString()
     : null
 
+  // 6️⃣ Build metadata for storage
   const billingMeta = {
-    total: subscription.plan?.amount || null,
-    currency: subscription.currency,
-    invoice_number: subscription.latest_invoice,
-    paid: subscription.status === 'active',
-    subscription_id: subscription.id,
-    billing_reason: subscription.status,
-    customer: subscription.customer,
-    invoice_pdf: subscription.latest_invoice_url || null,
+    total: eventObject.amount_paid || eventObject.amount_due || 0,
+    currency: eventObject.currency,
+    invoice_number: eventObject.number || null,
+    paid: eventObject.paid === true,
+    subscription_id: eventObject.subscription || eventObject.id,
+    billing_reason: eventObject.billing_reason || 'unknown',
+    customer: eventObject.customer || null,
+    invoice_pdf: eventObject.invoice_pdf || null,
     plan_id: priceId
   }
 
+  // 7️⃣ Insert or update billing record
   const { data, error } = await supabase
     .from('billing')
     .upsert(
