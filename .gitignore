@@ -12,6 +12,7 @@ build/
 
 # Supabase specific
 .supabase/
+supabase/.temp/
 
 # Logs
 logs/
