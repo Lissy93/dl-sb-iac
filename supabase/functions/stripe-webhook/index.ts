@@ -44,15 +44,12 @@ serve(async (req: Request) => {
 
     // Route based on event type
     switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(event)
-        break
-
       case 'invoice.paid':
-      case 'customer.subscription.updated':
         await handleSubscriptionUpdated(event)
         break
-
+      case 'customer.subscription.created':
+        await handleSubscriptionUpdated(event)
+        break
       case 'invoice.payment_failed':
         await handlePaymentFailed(event)
         break
@@ -63,38 +60,16 @@ serve(async (req: Request) => {
 
       default:
         logInfo(`Unhandled event type: ${event.type}`)
-        break
+        return respError('Unexpected event', 400)
     }
 
     return respSuccess()
-  } catch (err) {
+  } catch (err: any) {
     logError('Webhook error:', err)
     return respError(err.message || 'Unknown error', 400)
   }
 })
 
-/**
- * Handles successful checkouts (new subscriptions)
- */
-async function handleCheckoutCompleted(event: any) {
-  const session = event.data.object as Stripe.Checkout.Session
-  const subId = session.subscription
-  if (!subId) {
-    logError('checkout.session.completed: No subscription ID found')
-    return
-  }
-
-  const subscription = await stripe.subscriptions.retrieve(String(subId))
-  const userId = getUserId(session, subscription)
-
-  if (!userId) {
-    logError('checkout.session.completed: No user_id found in metadata', { session, subscription })
-    return
-  }
-
-  await updateBillingRecord(userId, subscription)
-  sendEmail(userId, 'subscription_started')
-}
 
 /**
  * Handles subscription updates & invoice payments
@@ -107,7 +82,6 @@ async function handleSubscriptionUpdated(event: any) {
     logError(`${event.type}: No user_id in subscription metadata`, { subscription })
     return
   }
-
   await updateBillingRecord(userId, invoice)
   sendEmail(userId, 'subscription_updated')
 }
@@ -175,13 +149,12 @@ async function updateBillingRecord(userId: string, eventObject: any) {
   }
 
   // 4️⃣ Extract plan information from items
-  const priceId = items[0]?.price?.id
+  const priceId = items[0]?.price.lookup_key
   const plan = PLAN_MAPPING[priceId] || 'free'
 
   // 5️⃣ Get next payment due date (if applicable)
-  const nextPaymentDue = eventObject.current_period_end
-    ? new Date(eventObject.current_period_end * 1000).toISOString()
-    : null
+  const periodEnd = eventObject.current_period_end || items[0]?.period.end
+  const nextPaymentDue = periodEnd ? new Date(periodEnd * 1000).toISOString() : null
 
   // 6️⃣ Build metadata for storage
   const billingMeta = {
