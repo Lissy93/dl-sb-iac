@@ -215,7 +215,10 @@ async function downgradeToFreePlan(userId: string) {
  * Extracts user_id safely
  */
 function getUserId(session: Stripe.Checkout.Session | null, subscription: Stripe.Subscription): string | null {
-  return session?.subscription_details?.metadata?.user_id || subscription?.subscription_details?.metadata?.user_id || null
+  return session?.subscription_details?.metadata?.user_id
+    || subscription?.metadata?.user_id
+    || subscription?.subscription_details?.metadata?.user_id
+    || null
 }
 
 /**
