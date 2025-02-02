@@ -1,17 +1,43 @@
 
 
+ /$$$$$$$                                    /$$            
+| $$__  $$                                  |__/            
+| $$  \ $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$  /$$ /$$$$$$$   
+| $$  | $$ /$$__  $$| $$_  $$_  $$ |____  $$| $$| $$__  $$  
+| $$  | $$| $$  \ $$| $$ \ $$ \ $$  /$$$$$$$| $$| $$  \ $$  
+| $$  | $$| $$  | $$| $$ | $$ | $$ /$$__  $$| $$| $$  | $$  
+| $$$$$$$/|  $$$$$$/| $$ | $$ | $$|  $$$$$$$| $$| $$  | $$  
+|_______/  \______/ |__/ |__/ |__/ \_______/|__/|__/  |__/  
+                                                            
+                                                            
+                                                            
+ /$$                           /$$                          
+| $$                          | $$                          
+| $$        /$$$$$$   /$$$$$$$| $$   /$$  /$$$$$$   /$$$$$$ 
+| $$       /$$__  $$ /$$_____/| $$  /$$/ /$$__  $$ /$$__  $$
+| $$      | $$  \ $$| $$      | $$$$$$/ | $$$$$$$$| $$  \__/
+| $$      | $$  | $$| $$      | $$_  $$ | $$_____/| $$      
+| $$$$$$$$|  $$$$$$/|  $$$$$$$| $$ \  $$|  $$$$$$$| $$      
+|________/ \______/  \_______/|__/  \__/ \_______/|__/      
+                                                            
+
+>> This repo contains the code for Domain Locker's serverless edge functions. <<
+
 ================================================================================
 PROJECT SETUP
 ================================================================================
 Pre-requisites:
-Install Supabase CLI, launch Docker, then start the Supabase server with
-npx supabase start
+Install Supabase CLI, launch Docker, login, link project, and start Supabase:
+  npx supabase login
+  npx supabase link --project-ref ********************
+  npx supabase start
+  supabase status
 
 Development:
-npx supabase functions serve
+  npx supabase functions serve
 
 Deploy:
-npx supabase functions deploy
+  npx supabase functions deploy
 
 
 ================================================================================
