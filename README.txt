@@ -69,7 +69,7 @@ AS93_DOMAIN_INFO_KEY - And the key for the domain info API
 STRIPE_SECRET_KEY - Stripe secret key (starting with sk_live_ or sk_test_)
 STRIPE_WEBHOOK_SECRET - Stripe webhook secret (starting with whsec_)
 
-STRIPE_PRICE_HM - Stripe price ID for the hobby monthly plan (starting with price_)
+STRIPE_PRICE_HM - Stripe price ID for the hobby monthly plan (starting price_)
 STRIPE_PRICE_HA - Price ID for the hobby annual plan
 STRIPE_PRICE_PM - Price ID for the pro monthly plan
 STRIPE_PRICE_PA - Price ID for the pro annual plan
@@ -89,5 +89,33 @@ curl -i --location \
   --header 'Content-Type: application/json' \
   --data '{"name":"Dino"}'
 
-During development, the URL would be: http://127.0.0.1:54321/functions/v1/hello-world
+For local dev, the URL would be: http://127.0.0.1:54321/functions/v1/hello-world
 You can get the token from the Supabase dashboard, under settings --> API
+
+
+The code is intended to be portable.
+Deployable to Supabase functions, Deno Deploy, Fly.io, or any system via Docker.
+
+
+================================================================================
+LICENSE
+================================================================================
+
+Copyright (c) 2025 Alicia Sykes
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
