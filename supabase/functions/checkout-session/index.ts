@@ -74,7 +74,7 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { headers: responseHeaders, status: 400 });
     }
 
-    const { userId, productId, successUrl, cancelUrl } = body || {};
+    const { userId, productId, callbackUrl } = body || {};
     if (!userId || !productId) {
       return new Response(JSON.stringify({ error: 'Missing required fields: userId, productId' }), { headers: responseHeaders, status: 400 });
     }
@@ -87,8 +87,8 @@ serve(async (req: Request) => {
     const priceId = getEnvVar(envVarName);
 
     // 4) Build the payload to send to Stripe
-    const finalSuccessUrl = successUrl || `${APP_BASE_URL}/settings/upgrade?success=1`;
-    const finalCancelUrl  = cancelUrl  || `${APP_BASE_URL}/settings/upgrade?canceled=1`;
+    const finalSuccessUrl = (callbackUrl || APP_BASE_URL) + '/settings/upgrade?success=1';
+    const finalCancelUrl  = (callbackUrl  || APP_BASE_URL) + '/settings/upgrade?canceled=1';
 
     const line_items = [{ price: priceId, quantity: 1 }];
     const subscription_data = { metadata: { user_id: userId } };

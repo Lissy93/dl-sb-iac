@@ -75,15 +75,39 @@ serve(async (req: Request) => {
  * Handles subscription updates & invoice payments
  */
 async function handleSubscriptionUpdated(event: any) {
-  const subscription = event.data.object as Stripe.Subscription
-  const userId = getUserId(null, subscription)
-  const invoice = event.data.object as Stripe.Invoice
+  const invoice = event.data.object as Stripe.Invoice;
+  const userId = invoice.metadata?.user_id || invoice.subscription_details?.metadata?.user_id;
+  const billingReason = invoice.billing_reason;
+  const totalAmount = invoice.total;
+
   if (!userId) {
-    logError(`${event.type}: No user_id in subscription metadata`, { subscription })
-    return
+    logError(`${event.type}: No user_id in subscription metadata`, { invoice });
+    return;
   }
-  await updateBillingRecord(userId, invoice)
-  sendEmail(userId, 'subscription_updated')
+
+  // Always upgrade if the invoice is for a new subscription
+  if (billingReason === 'subscription_create') {
+    logInfo(`New subscription created for user ${userId}, ensuring upgrade`);
+    await updateBillingRecord(userId, invoice);
+    sendEmail(userId, 'subscription_created');
+    return;
+  }
+
+  // Ensure `lines.data` exists before using it
+  const hasOnlyProratedItems = invoice.lines?.data?.length
+    ? invoice.lines.data.every((item: { proration: boolean }) => item.proration === true)
+    : false;
+
+  // STRONG check for post-cancellation proration
+  if (billingReason === 'subscription_cycle' && totalAmount === 0 && hasOnlyProratedItems) {
+    logInfo(`Ignoring post-cancellation proration invoice for user ${userId}`);
+    return;
+  }
+
+  // Otherwise, always update billing record (err on the side of caution)
+  logInfo(`Processing invoice for user ${userId}, reason: ${billingReason}`);
+  await updateBillingRecord(userId, invoice);
+  sendEmail(userId, 'subscription_updated');
 }
 
 /**
