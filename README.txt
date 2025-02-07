@@ -80,6 +80,8 @@ npx supabase secrets set --env-file ./supabase/.env
 ================================================================================
 CRON JOBS
 ================================================================================
+We use crons to trigger some functions at specific times via pg_cron in Posthres
+This is used for keeping the domain info up-to-date, and for monitoring websites
 
 JOB 1 - Trigger domain updates at 04:00 every day
   - Schedule: 0 4 * * *
@@ -87,8 +89,8 @@ JOB 1 - Trigger domain updates at 04:00 every day
   - Nodeport: 5432
   - Database: postgres
   - Username: postgres
+  - Job Name: run_domain_update_job
   - Endpoint: https://[supabase-project].supabase.co/functions/v1/trigger-updates
-
 
 JOB 2 - Trigger website monitor every hour
   - Schedule: 0 * * * *
@@ -96,6 +98,7 @@ JOB 2 - Trigger website monitor every hour
   - Nodeport: 5432
   - Database: postgres
   - Username: postgres
+  - Job Name: run_website_monitor_job
   - Endpoint: https://[supabase-project].supabase.co/functions/v1/website-monitor
 
 Example SQL for cron job:
