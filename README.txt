@@ -78,6 +78,40 @@ Don't forget to pass the env vars to Supabase, with:
 npx supabase secrets set --env-file ./supabase/.env
 
 ================================================================================
+CRON JOBS
+================================================================================
+
+JOB 1 - Trigger domain updates at 04:00 every day
+  - Schedule: 0 4 * * *
+  - Nodename: localhost
+  - Nodeport: 5432
+  - Database: postgres
+  - Username: postgres
+  - Endpoint: https://[supabase-project].supabase.co/functions/v1/trigger-updates
+
+
+JOB 2 - Trigger website monitor every hour
+  - Schedule: 0 * * * *
+  - Nodename: localhost
+  - Nodeport: 5432
+  - Database: postgres
+  - Username: postgres
+  - Endpoint: https://[supabase-project].supabase.co/functions/v1/website-monitor
+
+Example SQL for cron job:
+  SELECT
+    net.http_post(
+      url := '[url to endpoint]',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer YOUR_API_KEY'
+      ),
+      body := '{}'::jsonb,
+      timeout_milliseconds := 5000
+    ) AS request_id;
+
+
+================================================================================
 NOTES
 ================================================================================
 
