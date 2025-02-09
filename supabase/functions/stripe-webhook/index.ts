@@ -85,6 +85,11 @@ async function handleSubscriptionUpdated(event: any) {
     return;
   }
 
+  if (invoice.plan.status === 'incomplete') {
+    logInfo(`Incomplete subscription for user ${userId}, ignoring`);
+    return
+  }
+
   // Always upgrade if the invoice is for a new subscription
   if (billingReason === 'subscription_create') {
     logInfo(`New subscription created for user ${userId}, ensuring upgrade`);
