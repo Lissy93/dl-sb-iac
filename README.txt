@@ -31,8 +31,7 @@ Pre-requisites:
   - Configure required environmental variables for service accounts (see below)
 
 Project setup:
-  npx supabase login
-  npx supabase link --project-ref YOUR_PROJECT_REF
+  npx supabase link --instance-url localhost:9000 --project-ref PROJECT_REF
   npx supabase start
   supabase status
 
@@ -41,6 +40,11 @@ Development:
 
 Deploy:
   npx supabase functions deploy
+
+================================================================================
+AUTOMATED CI/CD
+================================================================================
+We use GitHub Actions for testing and then deploying to Supabase when merged.
 
 ================================================================================
 FUNCTIONS
@@ -85,6 +89,12 @@ Resend:
   RESEND_API_KEY - The API key for the Resend service (send access)
   RESEND_SENDER - The sender email for Resend
 
+Twilio:
+  TWILIO_SID - Twilio account SID
+  TWILIO_AUTH_TOKEN - Twilio auth token
+  TWILIO_PHONE_NUMBER - Twilio phone number
+  TWILIO_WHATSAPP_NUMBER - Twilio WhatsApp number
+
 Don't forget to pass the env vars to Supabase, with:
 npx supabase secrets set --env-file supabase/functions/.env
 
@@ -123,6 +133,13 @@ Example SQL for cron job:
       body := '{}'::jsonb,
       timeout_milliseconds := 5000
     ) AS request_id;
+
+================================================================================
+SUPPORT
+================================================================================
+We do not provide support for this codebase. It is provided as-is.
+If you need help, please refer to the official docs for the services used.
+We are not accepting bug reports (except security issues) or feature requests.
 
 ================================================================================
 NOTES
