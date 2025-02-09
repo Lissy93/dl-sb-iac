@@ -1,5 +1,4 @@
 
-
  /$$$$$$$                                    /$$            
 | $$__  $$                                  |__/            
 | $$  \ $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$  /$$ /$$$$$$$   
@@ -60,19 +59,27 @@ Info Routes:
 ================================================================================
 ENVIRONMENT VARIABLES
 ================================================================================
-DB_URL - The URL to your Supabase project
-DB_KEY - The anon key to your Supabase project
+Supabase:
+  DB_URL - The URL to your Supabase project
+  DB_KEY - The anon key to your Supabase project
 
-AS93_DOMAIN_INFO_URL - The URL to our external domain info API
-AS93_DOMAIN_INFO_KEY - And the key for the domain info API
+API Endpoints:
+  AS93_DOMAIN_INFO_URL - The URL to our external domain info API
+  AS93_DOMAIN_INFO_KEY - And the key for the domain info API
 
-STRIPE_SECRET_KEY - Stripe secret key (starting with sk_live_ or sk_test_)
-STRIPE_WEBHOOK_SECRET - Stripe webhook secret (starting with whsec_)
+Stripe:
+  STRIPE_SECRET_KEY - Stripe secret key (starting with sk_live_ or sk_test_)
+  STRIPE_WEBHOOK_SECRET - Stripe webhook secret (starting with whsec_)
 
-STRIPE_PRICE_HM - Stripe price ID for the hobby monthly plan (starting price_)
-STRIPE_PRICE_HA - Price ID for the hobby annual plan
-STRIPE_PRICE_PM - Price ID for the pro monthly plan
-STRIPE_PRICE_PA - Price ID for the pro annual plan
+Stripe Prices:
+  STRIPE_PRICE_HM - Stripe price ID for the hobby monthly plan (starting price_)
+  STRIPE_PRICE_HA - Price ID for the hobby annual plan
+  STRIPE_PRICE_PM - Price ID for the pro monthly plan
+  STRIPE_PRICE_PA - Price ID for the pro annual plan
+
+Resend:
+  RESEND_API_KEY - The API key for the Resend service (send access)
+  RESEND_SENDER - The sender email for Resend
 
 Don't forget to pass the env vars to Supabase, with:
 npx supabase secrets set --env-file ./supabase/.env
@@ -117,7 +124,6 @@ Example SQL for cron job:
 ================================================================================
 NOTES
 ================================================================================
-
 Example CURL request:
 
 curl -i --location \
@@ -156,3 +162,16 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================================
+Coded with ♥️ and ♨ by Alicia Sykes <as93.net>
+Built for Domain Locker <domain-locker.com>
+
+Thanks for being here! (●'◡'●)
+               __
+              /°_)
+     _.----._/ /
+    /         /
+ __/ (  | (  |
+/__.-'|_|--|_|
+================================================================================
