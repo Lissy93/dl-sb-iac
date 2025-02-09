@@ -4,7 +4,7 @@ import { handleError } from "../error-handler.ts";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const RESEND_SENDER = Deno.env.get("RESEND_SENDER") ?? "";
 const RESEND_API_URL = "https://api.resend.com/emails ";
-const TEMPLATE_PATH = "https://gist.githubusercontent.com/Lissy93/e640156bc3a8e142cb8aab6193da4510/raw/77bed4734b8baec6b1405798c5c54a0cc4d33f74/notification-template.html";
+const TEMPLATE_PATH = Deno.env.get("EMAIL_TEMPLATE_PATH") ?? "";
 
 async function loadEmailTemplate(): Promise<string> {
   try {

@@ -62,7 +62,7 @@ export async function sendWebHookNotification(config: WebHookConfig, message: st
       throw new Error(`Request failed with status ${response.status}: ${response.statusText}`);
     }
 
-    console.log(`Webhook sent successfully to ${config.provider}`);
+    console.log(`✅ Webhook sent successfully to ${config.provider}`);
   } catch (error) {
     handleError(error, "WebHook Notification");
   }

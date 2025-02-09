@@ -19,6 +19,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { NotificationPreferences } from "./types.ts";
 import { sendWebHookNotification } from "./senders/webhook.ts";
 import { sendEmailNotification } from "./senders/email.ts";
+import { sendSlackNotification } from "./senders/slack.ts";
+import { sendSmsNotification } from "./senders/sms.ts";
 
 const DB_URL = Deno.env.get('DB_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? '';
@@ -96,6 +98,9 @@ Deno.serve(async (req) => {
     if (notificationChannels.matrix?.enabled) {
       await sendMatrixNotification(notificationChannels.matrix, message);
     }
+    if (notificationChannels.sms?.enabled) {
+      await sendSmsNotification(notificationChannels.sms, message);
+    }
 
     return new Response(
       JSON.stringify({ message: "Notifications sent successfully" }),
@@ -130,12 +135,6 @@ async function sendSignalNotification(config: any, message: string) {
 async function sendTelegramNotification(config: any, message: string) {
   console.log(`Sending Telegram message to chat ID ${config.chatId}: ${message}`);
   // TODO: Implement actual Telegram notification logic here
-}
-
-// Placeholder function for sending Slack notifications
-async function sendSlackNotification(config: any, message: string) {
-  console.log(`Sending Slack message to ${config.webhookUrl}: ${message}`);
-  // TODO: Implement actual Slack notification logic here
 }
 
 // Placeholder function for sending Matrix notifications

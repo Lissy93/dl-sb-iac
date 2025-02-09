@@ -49,4 +49,10 @@ export interface NotificationPreferences {
   telegram?: TelegramConfig;
   slack?: SlackConfig;
   matrix?: MatrixConfig;
+  sms?: SmsConfig;
+}
+
+export interface SmsConfig {
+  enabled: boolean;
+  number: string;
 }
