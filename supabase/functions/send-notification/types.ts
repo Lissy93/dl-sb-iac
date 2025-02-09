@@ -41,6 +41,16 @@ export interface MatrixConfig {
   accessToken: string;
 }
 
+export interface SmsConfig {
+  enabled: boolean;
+  number: string;
+}
+
+export interface WhatsAppConfig {
+  enabled: boolean;
+  number: string;
+}
+
 export interface NotificationPreferences {
   email?: EmailConfig;
   pushNotification?: PushNotificationConfig;
@@ -50,9 +60,5 @@ export interface NotificationPreferences {
   slack?: SlackConfig;
   matrix?: MatrixConfig;
   sms?: SmsConfig;
-}
-
-export interface SmsConfig {
-  enabled: boolean;
-  number: string;
+  whatsapp?: WhatsAppConfig;
 }

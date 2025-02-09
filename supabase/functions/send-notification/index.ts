@@ -21,6 +21,7 @@ import { sendWebHookNotification } from "./senders/webhook.ts";
 import { sendEmailNotification } from "./senders/email.ts";
 import { sendSlackNotification } from "./senders/slack.ts";
 import { sendSmsNotification } from "./senders/sms.ts";
+import { sendWhatsAppNotification } from "./senders/whatsapp.ts";
 
 const DB_URL = Deno.env.get('DB_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? '';
@@ -98,6 +99,9 @@ Deno.serve(async (req) => {
     if (notificationChannels.matrix?.enabled) {
       await sendMatrixNotification(notificationChannels.matrix, message);
     }
+    if (notificationChannels.whatsapp?.enabled) {
+      await sendWhatsAppNotification(notificationChannels.whatsapp, message);
+    }
     if (notificationChannels.sms?.enabled) {
       await sendSmsNotification(notificationChannels.sms, message);
     }
@@ -119,7 +123,6 @@ Deno.serve(async (req) => {
    Private Functions for Channels
 ================================ */
 
-// Placeholder function for sending push notifications
 async function sendPushNotification(config: any, message: string) {
   console.log(`Sending push notification: ${message}`);
   // TODO: Implement actual push notification logic here
