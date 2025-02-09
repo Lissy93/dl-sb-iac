@@ -143,7 +143,6 @@ Deployable to Supabase functions, Deno Deploy, Fly.io, or any system via Docker.
 ================================================================================
 LICENSE
 ================================================================================
-
 Copyright (c) 2025 Alicia Sykes
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -164,14 +163,17 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
-Coded with ♥️ and ♨ by Alicia Sykes <as93.net>
-Built for Domain Locker <domain-locker.com>
+ABOUT
+================================================================================
+Coded with ❤ and ♨ by Alicia Sykes                      https://aliciasykes.com
+Built for Domain Locker                                https://domain-locker.com
 
 Thanks for being here! (●'◡'●)
+================================================================================
+
                __
               /°_)
      _.----._/ /
     /         /
  __/ (  | (  |
 /__.-'|_|--|_|
-================================================================================
