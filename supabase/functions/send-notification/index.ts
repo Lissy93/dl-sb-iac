@@ -18,6 +18,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { NotificationPreferences } from "./types.ts";
 import { sendWebHookNotification } from "./senders/webhook.ts";
+import { sendEmailNotification } from "./senders/email.ts";
 
 const DB_URL = Deno.env.get('DB_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? '';
@@ -113,38 +114,32 @@ Deno.serve(async (req) => {
    Private Functions for Channels
 ================================ */
 
-// Placeholder function for sending email notifications
-async function sendEmailNotification(config: any, message: string) {
-  console.log(`Sending email to ${config.address}: ${message}`);
-  // Implement actual email sending logic here
-}
-
 // Placeholder function for sending push notifications
 async function sendPushNotification(config: any, message: string) {
   console.log(`Sending push notification: ${message}`);
-  // Implement actual push notification logic here
+  // TODO: Implement actual push notification logic here
 }
 
 // Placeholder function for sending Signal notifications
 async function sendSignalNotification(config: any, message: string) {
   console.log(`Sending Signal message to ${config.number}: ${message}`);
-  // Implement actual Signal notification logic here
+  // TODO: Implement actual Signal notification logic here
 }
 
 // Placeholder function for sending Telegram notifications
 async function sendTelegramNotification(config: any, message: string) {
   console.log(`Sending Telegram message to chat ID ${config.chatId}: ${message}`);
-  // Implement actual Telegram notification logic here
+  // TODO: Implement actual Telegram notification logic here
 }
 
 // Placeholder function for sending Slack notifications
 async function sendSlackNotification(config: any, message: string) {
   console.log(`Sending Slack message to ${config.webhookUrl}: ${message}`);
-  // Implement actual Slack notification logic here
+  // TODO: Implement actual Slack notification logic here
 }
 
 // Placeholder function for sending Matrix notifications
 async function sendMatrixNotification(config: any, message: string) {
   console.log(`Sending Matrix message to ${config.homeserverUrl}: ${message}`);
-  // Implement actual Matrix notification logic here
+  // TODO: Implement actual Matrix notification logic here
 }

@@ -23,12 +23,16 @@
 >> This repo contains the code for Domain Locker's serverless edge functions. <<
 
 ================================================================================
-PROJECT SETUP
+PROJECT USAGE
 ================================================================================
 Pre-requisites:
-Install Supabase CLI, launch Docker, login, link project, and start Supabase:
+  - Install Git, Deno, Supabase CLI, Postgres and Docker on your local machine
+  - Deploy a Supabase instance. See https://supabase.io/docs/guides/self-hosting
+  - Configure required environmental variables for service accounts (see below)
+
+Project setup:
   npx supabase login
-  npx supabase link --project-ref ********************
+  npx supabase link --project-ref YOUR_PROJECT_REF
   npx supabase start
   supabase status
 
@@ -38,23 +42,23 @@ Development:
 Deploy:
   npx supabase functions deploy
 
-
 ================================================================================
 FUNCTIONS
 ================================================================================
 Stripe and Billing:
-- cancel-subscription
-- checkout-session
-- stripe-webhook
+- cancel-subscription Cancels a user's subscription
+- checkout-session    Creates a new checkout session for a subscription
+- stripe-webhook      Handles incoming events triggered from Stripe
 
 Domain Management:
-- trigger-updates - Selects all domains for users, and triggers domain-updater
-- domain-updater - Updates domains with latest info, triggers notifications
-- send-notification - Sends a notification to user id with message
-- website-monitor - Gets response info for each (pro) domain, updates db
+- trigger-updates     Selects all domains for users, and triggers domain-updater
+- domain-updater      Updates domains with latest info, triggers notifications
+- send-notification   Sends a notification to user id with message
+- website-monitor     Gets response info for each (pro) domain, updates db
 
 Info Routes:
-- domain-info
+- domain-info         Fetches all info for any given domain name
+- domain-subs         Fetches all subdomains for any given domain
 
 ================================================================================
 ENVIRONMENT VARIABLES
@@ -82,7 +86,7 @@ Resend:
   RESEND_SENDER - The sender email for Resend
 
 Don't forget to pass the env vars to Supabase, with:
-npx supabase secrets set --env-file ./supabase/.env
+npx supabase secrets set --env-file supabase/functions/.env
 
 ================================================================================
 CRON JOBS
@@ -120,7 +124,6 @@ Example SQL for cron job:
       timeout_milliseconds := 5000
     ) AS request_id;
 
-
 ================================================================================
 NOTES
 ================================================================================
@@ -138,7 +141,6 @@ You can get the token from the Supabase dashboard, under settings --> API
 
 The code is intended to be portable.
 Deployable to Supabase functions, Deno Deploy, Fly.io, or any system via Docker.
-
 
 ================================================================================
 LICENSE
