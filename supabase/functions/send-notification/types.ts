@@ -26,7 +26,6 @@ export interface SignalConfig {
 
 export interface TelegramConfig {
   enabled: boolean;
-  botToken: string;
   chatId: string;
 }
 

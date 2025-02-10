@@ -75,7 +75,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    const notificationChannels = data.notification_channels as NotificationPreferences;
+    // Fetch user's current plan from the billing table
+    const { data: billingData } = await supabase
+      .from('billing')
+      .select('current_plan')
+      .eq('user_id', userId)
+      .single();
+
+    // If the user's plan is 'free', remove all notification channels except email
+    if (billingData && billingData.current_plan === 'free') {
+      const emailChannel = data.notification_channels.email;
+      data.notification_channels = { email: emailChannel };
+    }
+
+    const notificationChannels = (data.notification_channels || {}) as NotificationPreferences;
 
     // Step 3: For each enabled channel, send the message using the corresponding channel function
     if (notificationChannels.email?.enabled) {
@@ -106,8 +119,10 @@ Deno.serve(async (req) => {
       await sendSmsNotification(notificationChannels.sms, message);
     }
 
+    const numberOfActiveChannels = Object.values(notificationChannels).filter((channel) => channel.enabled).length || 0;
+
     return new Response(
-      JSON.stringify({ message: "Notifications sent successfully" }),
+      JSON.stringify({ message: `✅ Notifications sent successfully to ${numberOfActiveChannels} channels` }),
       { headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {

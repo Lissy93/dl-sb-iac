@@ -95,6 +95,9 @@ Twilio:
   TWILIO_PHONE_NUMBER - Twilio phone number
   TWILIO_WHATSAPP_NUMBER - Twilio WhatsApp number
 
+Telegram
+  TELEGRAM_BOT_TOKEN - The token for the telegram notification bot
+
 Don't forget to pass the env vars to Supabase, with:
 npx supabase secrets set --env-file supabase/functions/.env
 
