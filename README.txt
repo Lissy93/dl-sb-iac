@@ -31,7 +31,7 @@ Pre-requisites:
   - Configure required environmental variables for service accounts (see below)
 
 Project setup:
-  npx supabase link --instance-url localhost:9000 --project-ref PROJECT_REF
+  npx supabase link --project-ref PROJECT_REF
   npx supabase start
   supabase status
 
@@ -190,12 +190,11 @@ ABOUT
 Coded with ❤ and ♨ by Alicia Sykes                      https://aliciasykes.com
 Built for Domain Locker                                https://domain-locker.com
 
-Thanks for being here! (●'◡'●)
+                        Thanks for being here! (●'◡'●)
 ================================================================================
-
-               __
-              /°_)
-     _.----._/ /
-    /         /
- __/ (  | (  |
-/__.-'|_|--|_|
+                                              __
+                                             /°_)
+                                    _.----._/ /
+                                   /         /
+                                __/ (  | (  |
+                               /__.-'|_|--|_|
