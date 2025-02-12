@@ -23,6 +23,20 @@
 >> This repo contains the config, schema and edge functions for Domain Locker <<
 
 ================================================================================
+DIRECTORY STRUCTURE
+================================================================================
+domain-locker-edge/
+├─ supabase/
+│  ├─ functions/    # Deno Edge functions
+│  ├─ migrations/   # Database schema
+│  ├─ templates/    # Mailer templates
+│  ╰─ config.toml   # Supabase configuration
+├─ Makefile         # Project commands
+├─ deno.json        # Deno project config
+├─ README.txt       # You're looking at it ;)
+╰─ .gitignore       # Stuff to not commit
+
+================================================================================
 DEVELOPING
 ================================================================================
 Pre-requisites:
@@ -58,12 +72,12 @@ Supabase:
   DB_KEY - The anon key to your new Supabase project
 
 Authentication
-  SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID	- Google OAuth Client ID
-  SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET - Google OAuth Secret	Google
-  SUPABASE_AUTH_EXTERNAL_FACEBOOK_CLIENT_ID	- Facebook OAuth Client ID
-  SUPABASE_AUTH_EXTERNAL_FACEBOOK_SECRET	- Facebook OAuth Secret
-  SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID - GitHub OAuth Client ID
-  SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET - GitHub OAuth Secret
+  SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID   - Google OAuth Client ID
+  SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET      - Google OAuth Secret
+  SUPABASE_AUTH_EXTERNAL_FACEBOOK_CLIENT_ID - Facebook OAuth Client ID
+  SUPABASE_AUTH_EXTERNAL_FACEBOOK_SECRET    - Facebook OAuth Secret
+  SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID   - GitHub OAuth Client ID
+  SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET      - GitHub OAuth Secret
 
 API Endpoints:
   AS93_DOMAIN_INFO_URL - The URL to our external domain info API
