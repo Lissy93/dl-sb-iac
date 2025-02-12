@@ -20,56 +20,50 @@
 |________/ \______/  \_______/|__/  \__/ \_______/|__/      
                                                             
 
->> This repo contains the code for Domain Locker's serverless edge functions. <<
+>> This repo contains the config, schema and edge functions for Domain Locker <<
 
 ================================================================================
-PROJECT USAGE
+DEVELOPING
 ================================================================================
 Pre-requisites:
   - Install Git, Deno, Supabase CLI, Postgres and Docker on your local machine
   - Deploy a Supabase instance. See https://supabase.io/docs/guides/self-hosting
-  - Configure required environmental variables for service accounts (see below)
+  - Configure all the required environmental variables for services (see below)
 
 Project setup:
-  npx supabase link --project-ref PROJECT_REF
-  npx supabase start
-  supabase status
+  git clone git@github.com:Lissy93/domain-locker-edge.git
+  supabase link --project-ref PROJECT_REF
 
 Development:
-  npx supabase functions serve
-
-Deploy:
-  npx supabase functions deploy
-
-================================================================================
-AUTOMATED CI/CD
-================================================================================
-We use GitHub Actions for testing and then deploying to Supabase when merged.
+  supabase start
+  supabase status
+  supabase functions serve
 
 ================================================================================
-FUNCTIONS
+DEPLOYING
 ================================================================================
-Stripe and Billing:
-- cancel-subscription Cancels a user's subscription
-- checkout-session    Creates a new checkout session for a subscription
-- stripe-webhook      Handles incoming events triggered from Stripe
+supabase secrets set-from-env   # Set environments
+supabase config push            # Apply configuration
+supabase db push                # Deploy schema
+supabase functions deploy       # Deploy functions
 
-Domain Management:
-- trigger-updates     Selects all domains for users, and triggers domain-updater
-- domain-updater      Updates domains with latest info, triggers notifications
-- send-notification   Sends a notification to user id with message
-- website-monitor     Gets response info for each (pro) domain, updates db
-
-Info Routes:
-- domain-info         Fetches all info for any given domain name
-- domain-subs         Fetches all subdomains for any given domain
+We use GitHub Actions for CI/CD.
+The workflow builds, lints, tests and then deploys the project to staging
 
 ================================================================================
 ENVIRONMENT VARIABLES
 ================================================================================
 Supabase:
-  DB_URL - The URL to your Supabase project
-  DB_KEY - The anon key to your Supabase project
+  DB_URL - The URL to your Supabase instance and project
+  DB_KEY - The anon key to your new Supabase project
+
+Authentication
+  SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID	- Google OAuth Client ID
+  SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET - Google OAuth Secret	Google
+  SUPABASE_AUTH_EXTERNAL_FACEBOOK_CLIENT_ID	- Facebook OAuth Client ID
+  SUPABASE_AUTH_EXTERNAL_FACEBOOK_SECRET	- Facebook OAuth Secret
+  SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID - GitHub OAuth Client ID
+  SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET - GitHub OAuth Secret
 
 API Endpoints:
   AS93_DOMAIN_INFO_URL - The URL to our external domain info API
@@ -102,6 +96,24 @@ Don't forget to pass the env vars to Supabase, with:
 npx supabase secrets set --env-file supabase/functions/.env
 
 ================================================================================
+FUNCTIONS
+================================================================================
+Stripe and Billing:
+- cancel-subscription Cancels a user's subscription
+- checkout-session    Creates a new checkout session for a subscription
+- stripe-webhook      Handles incoming events triggered from Stripe
+
+Domain Management:
+- trigger-updates     Selects all domains for users, and triggers domain-updater
+- domain-updater      Updates domains with latest info, triggers notifications
+- send-notification   Sends a notification to user id with message
+- website-monitor     Gets response info for each (pro) domain, updates db
+
+Info Routes:
+- domain-info         Fetches all info for any given domain name
+- domain-subs         Fetches all subdomains for any given domain
+
+================================================================================
 CRON JOBS
 ================================================================================
 We use crons to trigger some functions at specific times via pg_cron in Posthres
@@ -114,7 +126,7 @@ JOB 1 - Trigger domain updates at 04:00 every day
   - Database: postgres
   - Username: postgres
   - Job Name: run_domain_update_job
-  - Endpoint: https://[supabase-project].supabase.co/functions/v1/trigger-updates
+  - Endpoint: https://[supabase-instance]/functions/v1/trigger-updates
 
 JOB 2 - Trigger website monitor every hour
   - Schedule: 0 * * * *
@@ -123,7 +135,7 @@ JOB 2 - Trigger website monitor every hour
   - Database: postgres
   - Username: postgres
   - Job Name: run_website_monitor_job
-  - Endpoint: https://[supabase-project].supabase.co/functions/v1/website-monitor
+  - Endpoint: https://[supabase-instance]/functions/v1/website-monitor
 
 Example SQL for cron job:
   SELECT
@@ -142,25 +154,26 @@ SUPPORT
 ================================================================================
 We do not provide support for this codebase. It is provided as-is.
 If you need help, please refer to the official docs for the services used.
-We are not accepting bug reports (except security issues) or feature requests.
+We are not accepting feature requests or bug reports (except security issues).
 
 ================================================================================
 NOTES
 ================================================================================
+Do not modify anything in Supabase via the UI, as it will break everything.
+Update the TOML file, schema and function code here instead, then re-deploy.
+
+You must specify ALL environmental variables correctly for everything to work.
+
+It is your responsibility to maintain, secure and backup your Supabase instance.
+
 Example CURL request:
+  curl -i --location \
+    --request POST 'https://[project].supabase.co/functions/v1/hello-world' \
+    --header 'Authorization: Bearer xxxxx' \
+    --header 'Content-Type: application/json' \
+    --data '{"name":"Dino"}'
 
-curl -i --location \
-  --request POST 'https://[project].supabase.co/functions/v1/hello-world' \
-  --header 'Authorization: Bearer xxxxx' \
-  --header 'Content-Type: application/json' \
-  --data '{"name":"Dino"}'
-
-For local dev, the URL would be: http://127.0.0.1:54321/functions/v1/hello-world
-You can get the token from the Supabase dashboard, under settings --> API
-
-
-The code is intended to be portable.
-Deployable to Supabase functions, Deno Deploy, Fly.io, or any system via Docker.
+Or, for local dev, the URL would be: 127.0.0.1:54321/functions/v1/hello-world
 
 ================================================================================
 LICENSE
