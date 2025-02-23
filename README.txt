@@ -1,23 +1,23 @@
 
- /$$$$$$$                                    /$$            
-| $$__  $$                                  |__/            
-| $$  \ $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$  /$$ /$$$$$$$   
-| $$  | $$ /$$__  $$| $$_  $$_  $$ |____  $$| $$| $$__  $$  
-| $$  | $$| $$  \ $$| $$ \ $$ \ $$  /$$$$$$$| $$| $$  \ $$  
-| $$  | $$| $$  | $$| $$ | $$ | $$ /$$__  $$| $$| $$  | $$  
-| $$$$$$$/|  $$$$$$/| $$ | $$ | $$|  $$$$$$$| $$| $$  | $$  
-|_______/  \______/ |__/ |__/ |__/ \_______/|__/|__/  |__/  
-                                                            
-                                                            
-                                                            
- /$$                           /$$                          
-| $$                          | $$                          
-| $$        /$$$$$$   /$$$$$$$| $$   /$$  /$$$$$$   /$$$$$$ 
-| $$       /$$__  $$ /$$_____/| $$  /$$/ /$$__  $$ /$$__  $$
-| $$      | $$  \ $$| $$      | $$$$$$/ | $$$$$$$$| $$  \__/
-| $$      | $$  | $$| $$      | $$_  $$ | $$_____/| $$      
-| $$$$$$$$|  $$$$$$/|  $$$$$$$| $$ \  $$|  $$$$$$$| $$      
-|________/ \______/  \_______/|__/  \__/ \_______/|__/      
+          /$$$$$$$                                    /$$            
+         | $$__  $$                                  |__/            
+         | $$  \ $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$  /$$ /$$$$$$$   
+         | $$  | $$ /$$__  $$| $$_  $$_  $$ |____  $$| $$| $$__  $$  
+         | $$  | $$| $$  \ $$| $$ \ $$ \ $$  /$$$$$$$| $$| $$  \ $$  
+         | $$  | $$| $$  | $$| $$ | $$ | $$ /$$__  $$| $$| $$  | $$  
+         | $$$$$$$/|  $$$$$$/| $$ | $$ | $$|  $$$$$$$| $$| $$  | $$  
+         |_______/  \______/ |__/ |__/ |__/ \_______/|__/|__/  |__/  
+                                                                     
+                                                                     
+                                                                     
+          /$$                           /$$                          
+         | $$                          | $$                          
+         | $$        /$$$$$$   /$$$$$$$| $$   /$$  /$$$$$$   /$$$$$$ 
+         | $$       /$$__  $$ /$$_____/| $$  /$$/ /$$__  $$ /$$__  $$
+         | $$      | $$  \ $$| $$      | $$$$$$/ | $$$$$$$$| $$  \__/
+         | $$      | $$  | $$| $$      | $$_  $$ | $$_____/| $$      
+         | $$$$$$$$|  $$$$$$/|  $$$$$$$| $$ \  $$|  $$$$$$$| $$      
+         |________/ \______/  \_______/|__/  \__/ \_______/|__/      
                                                             
 
 >> This repo contains the config, schema and edge functions for Domain Locker <<
@@ -61,8 +61,7 @@ supabase config push            # Apply configuration
 supabase db push                # Deploy schema
 supabase functions deploy       # Deploy functions
 
-We use GitHub Actions for CI/CD.
-The workflow builds, lints, tests and then deploys the project to staging
+See the `Makefile` for all deployment commands. We use GitHub Actions for CI/CD.
 
 ================================================================================
 ENVIRONMENT VARIABLES
@@ -183,12 +182,9 @@ You'll need a solid understanding of Deno, Supabase, Postgres and Docker
 ================================================================================
 NOTES
 ================================================================================
-Do not modify anything in Supabase via the UI, as it will break everything.
-Update the TOML file, schema and function code here instead, then re-deploy.
-
-You must specify ALL environmental variables correctly for everything to work.
-
-It is your responsibility to maintain, secure and backup your Supabase instance.
+For troubleshooting, ensure protocol, method, port, headers and body are correct
+You must set and upload ALL environmental variables properly for things to work
+Avoid configuring in the Supabase UI, instead update the TOML file and re-deploy
 
 Example CURL request:
   curl -i --location \
@@ -198,6 +194,8 @@ Example CURL request:
     --data '{"name":"Dino"}'
 
 Or, for local dev, the URL would be: 127.0.0.1:54321/functions/v1/hello-world
+
+It is your responsibility to maintain, secure and backup your Supabase instance
 
 ================================================================================
 LICENSE
