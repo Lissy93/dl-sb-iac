@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import Stripe from 'https://esm.sh/stripe@11.15.0?target=deno';
 
 // Load environment variables
 const DB_URL = Deno.env.get('DB_URL') ?? '';
@@ -10,10 +11,24 @@ const NOTIFICATION_URL = Deno.env.get('WORKER_SEND_NOTIFICATION_URL') ?? `${DB_U
 // Ensure required env variables are set
 if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
 
+const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+if (!STRIPE_SECRET_KEY) {
+  console.error('❌ Missing STRIPE_SECRET_KEY');
+}
+
 // Initialize Supabase client (service role for RLS bypass)
 const supabase = createClient(DB_URL, DB_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
 });
+
+const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20.acacia' });
+
+const STRIPE_PLAN_MAPPING: Record<string, string> = {
+  'dl_hobby_monthly': 'hobby',
+  'dl_hobby_annual': 'hobby',
+  'dl_pro_monthly': 'pro',
+  'dl_pro_annual': 'pro',
+};
 
 /**
  * Fetches the list of GitHub sponsors.
@@ -50,12 +65,43 @@ async function waitForUser(userId: string, retries = 5, delayMs = 2000): Promise
 }
 
 /**
- * Placeholder for checking Stripe billing.
- * Returns a paid plan if a valid subscription exists.
+ * Checks if a user has an active Stripe subscription and returns their plan.
+ * Returns `null` if no active plan is found.
  */
-async function stripeBillingCheck(userId: string): Promise<string | null> {
-  // TODO: Implement actual Stripe integration
-  return null; // Returns null if no active Stripe subscription
+export async function stripeBillingCheck(userId: string): Promise<string | null> {
+  try {
+    if (!STRIPE_SECRET_KEY) return null; // Skip check if Stripe key is missing
+
+    // Fetch all subscriptions linked to this user (we assume metadata contains `user_id`)
+    const subscriptions = await stripe.subscriptions.list({
+      expand: ['data.items'],
+    });
+
+    // Find the most recent active subscription for the user
+    const activeSubscription = subscriptions.data.find(
+      (sub: any) => sub.status === 'active' && sub.metadata?.user_id === userId
+    );
+
+    if (!activeSubscription) {
+      console.info(`🔍 No active Stripe subscription found for user ${userId}`);
+      return null;
+    }
+
+    // Get the plan lookup key from the first item in the subscription
+    const priceId = activeSubscription.items.data[0]?.price?.lookup_key;
+    if (!priceId) {
+      console.warn(`⚠️ User ${userId} has an active subscription but no valid plan ID.`);
+      return null;
+    }
+
+    // Map to internal plan name
+    const mappedPlan = STRIPE_PLAN_MAPPING[priceId] || null;
+    console.info(`✅ User ${userId} has an active ${mappedPlan} plan via Stripe`);
+    return mappedPlan;
+  } catch (err) {
+    console.error(`❌ Error checking Stripe subscription for user ${userId}:`, err);
+    return null;
+  }
 }
 
 /**
