@@ -8,6 +8,8 @@ const SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
 
 if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
 
+const SEND_NOTIFICATIONS_URL = Deno.env.get('WORKER_SEND_NOTIFICATION_URL') ?? `${DB_URL}/functions/v1/send-notification`;
+
 // Initialize Supabase client (service role for RLS bypass)
 const supabase = createClient(DB_URL, DB_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
@@ -57,6 +59,9 @@ async function determineBillingPlan(userId: string): Promise<string> {
   const githubUsername = user.user_metadata?.user_name ?? user.user_metadata?.github_username;
   if (!githubUsername || user.app_metadata?.provider !== 'github') return 'free';
 
+  // TODO: Check Stripe for an active subscription.
+  // Stripe takes precedence over GitHub sponsors if a non-free value is found.
+
   const sponsors = await fetchGitHubSponsors();
   return sponsors.has(githubUsername.toLowerCase()) ? 'sponsor' : 'free';
 }
@@ -77,6 +82,17 @@ async function setupUserBilling(userId: string) {
     if (existing?.current_plan && existing.current_plan !== 'free') return;
 
     const plan = await determineBillingPlan(userId);
+
+    if (plan !== 'free' && plan !== existing?.current_plan) {
+      await fetch(SEND_NOTIFICATIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          message: `You've been upgraded to the ${plan} plan! 🎉`
+        })
+      });
+    }
 
     await supabase.from('billing').upsert(
       { user_id: userId, current_plan: plan, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
