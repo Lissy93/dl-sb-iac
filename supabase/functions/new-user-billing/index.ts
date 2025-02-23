@@ -4,85 +4,119 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 // Load environment variables
 const DB_URL = Deno.env.get('DB_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? '';
-const SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
+const AS93_SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
 
-if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
-
-// Initialize Supabase client (service role for RLS bypass)
 const supabase = createClient(DB_URL, DB_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
 });
 
 /**
- * Fetches the list of GitHub sponsors.
+ * Fetches GitHub sponsors from the API.
  */
-async function fetchGitHubSponsors(): Promise<Set<string>> {
-  if (!SPONSORS_API) return new Set();
+async function fetchGitHubSponsors(): Promise<string[]> {
+  if (!AS93_SPONSORS_API) {
+    console.warn('⚠️ GitHub Sponsors API is not set, skipping sponsorship checks.');
+    return [];
+  }
 
   try {
-    const res = await fetch(`${SPONSORS_API}/lissy93`);
-    if (!res.ok) throw new Error('Failed to fetch GitHub sponsors');
+    const response = await fetch(`${AS93_SPONSORS_API}/lissy93`);
+    if (!response.ok) throw new Error('Failed to fetch GitHub sponsors');
 
-    const sponsors = await res.json();
-    return new Set(sponsors.map((s: { login: string }) => s.login.toLowerCase()));
-  } catch (err) {
-    console.error('❌ Error fetching sponsors:', err);
-    return new Set();
+    const sponsors = await response.json();
+    return sponsors.map((sponsor: { login: string }) => sponsor.login);
+  } catch (error) {
+    console.error('❌ Error fetching GitHub sponsors:', error);
+    return [];
   }
 }
 
 /**
- * Determines the correct billing plan for a user.
+ * Determines the correct billing plan for a new user.
  */
 async function determineBillingPlan(userId: string): Promise<string> {
   const { data: user, error } = await supabase.auth.admin.getUserById(userId);
-  if (error || !user?.user) return 'free';
+  if (error || !user?.user) {
+    console.error('❌ Error fetching user data:', error?.message);
+    return 'free';
+  }
 
-  const githubUsername = user.user.user_metadata?.user_name ?? user.user.user_metadata?.github_username;
-  if (!githubUsername || user.user.app_metadata?.provider !== 'github') return 'free';
+  let plan = 'free';
+  const metadata = user.user.user_metadata ?? {};
+  const appMetadata = user.user.app_metadata ?? {};
 
+  // Get GitHub username if linked
+  const githubUsername = metadata.user_name ?? metadata.github_username;
+  if (!githubUsername || appMetadata.provider !== 'github') return plan;
+
+  console.log(`🔍 User ${userId} linked GitHub: ${githubUsername}`);
+
+  // Check if they are a sponsor
   const sponsors = await fetchGitHubSponsors();
-  return sponsors.has(githubUsername.toLowerCase()) ? 'sponsor' : 'free';
+  if (sponsors.some((sponsor) => sponsor?.toLowerCase() === githubUsername?.toLowerCase())) {
+    plan = 'sponsor';
+  }
+
+  return plan;
 }
 
 /**
- * Ensures the user has a billing entry with the correct plan.
+ * Sets up the user's billing entry.
  */
 async function setupUserBilling(userId: string) {
   try {
-    // Check if user already has a non-free billing record
-    const { data: existing, error } = await supabase
+    // Check if user already has a billing record
+    const { data: existingBilling } = await supabase
       .from('billing')
       .select('current_plan')
       .eq('user_id', userId)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw error; // Ignore "no rows found"
-    if (existing?.current_plan && existing.current_plan !== 'free') return;
+    if (existingBilling && existingBilling.current_plan !== 'free') {
+      console.info(`✅ User ${userId} already has a paid billing plan.`);
+      return;
+    }
 
+    // Get correct plan
     const plan = await determineBillingPlan(userId);
+    console.log(`🔍 Setting up billing for user ${userId} with plan: ${plan}`);
 
-    await supabase.from('billing').upsert(
-      { user_id: userId, current_plan: plan, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    // Insert billing record
+    const { error } = await supabase.from('billing').upsert(
+      {
+        user_id: userId,
+        current_plan: plan,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'user_id' }
     );
 
-    console.info(`✅ User ${userId} set up on ${plan} plan`);
-  } catch (err) {
-    console.error('❌ Error setting up billing:', err);
+    if (error) throw error;
+    console.info(`✅ Billing setup complete for user ${userId}`);
+  } catch (error) {
+    console.error('❌ Error setting up billing:', error);
   }
 }
 
-// Supabase Edge Function: Handles user signup events
+/**
+ * Supabase Edge Function: Handles new user signups.
+ */
 serve(async (req) => {
   try {
-    const { userId, user_id } = await req.json();
-    if (!userId && !user_id) return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
+    const { userId } = await req.json();
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
+    }
 
-    await setupUserBilling(userId || user_id);
+    await setupUserBilling(userId);
     return new Response(JSON.stringify({ success: true }), { status: 200 });
-  } catch (err) {
-    console.error('❌ Unexpected error:', err);
+  } catch (error) {
+    console.error('❌ Unexpected error:', error);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
   }
 });
