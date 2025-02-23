@@ -2,26 +2,24 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@11.15.0?target=deno';
 
-// Load environment variables
+// 🔹 Load environment variables
 const DB_URL = Deno.env.get('DB_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? '';
 const SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
 const NOTIFICATION_URL = Deno.env.get('WORKER_SEND_NOTIFICATION_URL') ?? `${DB_URL}/functions/v1/send-notification`;
-
-// Ensure required env variables are set
-if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
-
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
-if (!STRIPE_SECRET_KEY) {
-  console.error('❌ Missing STRIPE_SECRET_KEY');
-}
 
-// Initialize Supabase client (service role for RLS bypass)
+// 🔹 Ensure required environment variables are set
+if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
+if (!STRIPE_SECRET_KEY) console.warn('⚠️ Missing STRIPE_SECRET_KEY. Stripe billing checks will be skipped.');
+
+// 🔹 Initialize Supabase client (service role for RLS bypass)
 const supabase = createClient(DB_URL, DB_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
 });
 
-const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20.acacia' });
+// 🔹 Initialize Stripe client (if key is present)
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20.acacia' }) : null;
 
 const STRIPE_PLAN_MAPPING: Record<string, string> = {
   'dl_hobby_monthly': 'hobby',
@@ -29,6 +27,24 @@ const STRIPE_PLAN_MAPPING: Record<string, string> = {
   'dl_pro_monthly': 'pro',
   'dl_pro_annual': 'pro',
 };
+
+/**
+ * Fetches a user from Supabase Auth.
+ * Fails fast if the user is not found.
+ */
+async function getUser(userId: string): Promise<any | null> {
+  try {
+    const { data, error } = await supabase.auth.admin.getUserById(userId);
+    if (error || !data?.user) {
+      console.error(`❌ User ${userId} not found.`);
+      return null;
+    }
+    return data.user;
+  } catch (err) {
+    console.error(`❌ Error fetching user ${userId}:`, err);
+    return null;
+  }
+}
 
 /**
  * Fetches the list of GitHub sponsors.
@@ -41,7 +57,7 @@ async function fetchGitHubSponsors(): Promise<Set<string>> {
     if (!res.ok) throw new Error('Failed to fetch GitHub sponsors');
 
     const sponsors = await res.json();
-    return new Set(sponsors.map((s: { login: string }) => s.login.toLowerCase()));
+    return new Set(sponsors.map((s: { login: string }) => (s.login || '').toLowerCase()));
   } catch (err) {
     console.error('❌ Error fetching GitHub sponsors:', err);
     return new Set();
@@ -49,45 +65,62 @@ async function fetchGitHubSponsors(): Promise<Set<string>> {
 }
 
 /**
- * Waits for the user to be available in Supabase Auth.
- * Prevents race conditions where the user might not yet be saved.
+ * Checks if a user has an active Stripe subscription.
+ * Returns the corresponding billing plan or `null` if none.
  */
-async function waitForUser(userId: string, retries = 5, delayMs = 2000): Promise<any | null> {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const { data, error } = await supabase.auth.admin.getUserById(userId);
-    if (!error && data?.user) return data.user;
-
-    console.warn(`⏳ User ${userId} not found yet. Retry ${attempt}/${retries}...`);
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-  }
-  console.error(`❌ User ${userId} not found after ${retries} retries.`);
-  return null;
-}
-
 /**
- * Checks if a user has an active Stripe subscription and returns their plan.
- * Returns `null` if no active plan is found.
+ * Fetches the Stripe billing plan for a user.
+ * Uses `customer_id` for efficient lookup.
  */
 export async function stripeBillingCheck(userId: string): Promise<string | null> {
+  if (!stripe) {
+    console.warn('⚠️ Stripe is not configured. Skipping billing checks.');
+    return null;
+  }
+
   try {
-    if (!STRIPE_SECRET_KEY) return null; // Skip check if Stripe key is missing
+    console.info(`🔍 Checking Stripe subscription for user ${userId}`);
 
-    // Fetch all subscriptions linked to this user (we assume metadata contains `user_id`)
-    const subscriptions = await stripe.subscriptions.list({
-      expand: ['data.items'],
-    });
+    // 🔹 STEP 1: Fetch `customer_id` from Supabase
+    const { data: billingRecord, error } = await supabase
+      .from('billing')
+      .select('stripe_customer_id')
+      .eq('user_id', userId)
+      .single();
 
-    // Find the most recent active subscription for the user
-    const activeSubscription = subscriptions.data.find(
-      (sub: any) => sub.status === 'active' && sub.metadata?.user_id === userId
+    if (error || !billingRecord?.stripe_customer_id) {
+      console.warn(`⚠️ No Stripe customer ID found for user ${userId}`);
+      return null;
+    }
+
+    const customerId = billingRecord.stripe_customer_id;
+
+    // Query Stripe for active subscription using `customer_id`
+    const timeout = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Stripe API request timed out')), 5000)
     );
 
+    const stripeResponse = await Promise.race([
+      stripe.subscriptions.search({
+        query: `status:'active' AND customer:'${customerId}'`,
+        expand: ['data.items'],
+      }),
+      timeout,
+    ]);
+
+    if (!stripeResponse || !('data' in stripeResponse)) {
+      console.warn(`⚠️ No valid response from Stripe for user ${userId}`);
+      return null;
+    }
+
+    // Get active subscription details
+    const activeSubscription = stripeResponse.data[0];
     if (!activeSubscription) {
       console.info(`🔍 No active Stripe subscription found for user ${userId}`);
       return null;
     }
 
-    // Get the plan lookup key from the first item in the subscription
+    // Extract plan ID from subscription
     const priceId = activeSubscription.items.data[0]?.price?.lookup_key;
     if (!priceId) {
       console.warn(`⚠️ User ${userId} has an active subscription but no valid plan ID.`);
@@ -104,19 +137,24 @@ export async function stripeBillingCheck(userId: string): Promise<string | null>
   }
 }
 
+
 /**
  * Determines the correct billing plan for a user.
- * Prioritizes Stripe subscriptions over GitHub sponsorships.
+ * Prioritizes Stripe over GitHub sponsorships.
  */
 async function determineBillingPlan(userId: string): Promise<string> {
-  const user = await waitForUser(userId);
-  if (!user) return 'free';
+  console.info('🔍 Determining appropriate billing plan for user')
+  const user = await getUser(userId);
+  if (!user) {
+    console.error(`❌ Cannot determine billing plan. User ${userId} does not exist.`);
+    return 'free';
+  }
 
-  // First, check if the user has an active Stripe subscription
+  // 🔹 Check Stripe first (higher priority)
   const stripePlan = await stripeBillingCheck(userId);
   if (stripePlan) return stripePlan;
 
-  // Then, check if they are a GitHub sponsor
+  // 🔹 Check GitHub sponsors
   const githubUsername = user.user_metadata?.user_name ?? user.user_metadata?.github_username;
   if (!githubUsername || user.app_metadata?.provider !== 'github') return 'free';
 
@@ -128,6 +166,7 @@ async function determineBillingPlan(userId: string): Promise<string> {
  * Ensures the user has a billing entry with the correct plan.
  */
 async function setupUserBilling(userId: string) {
+  console.log(`🔍 Checking billing for user ${userId}`);
   try {
     // Fetch existing billing record
     const { data: existing, error } = await supabase
@@ -136,27 +175,40 @@ async function setupUserBilling(userId: string) {
       .eq('user_id', userId)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw error; // Ignore "no rows found" errors
-    if (existing?.current_plan && existing.current_plan !== 'free') return; // Skip if user has a paid plan
+    console.info(`🔍 User ${userId} current plan: ${existing?.current_plan}`);
 
-    // Determine the correct plan
+    if (error && error.code !== 'PGRST116') { // Trow error if cannot read billing table
+      console.error('❌ Error fetching billing record:', error);
+      throw error;
+    }
+    if (existing?.current_plan && existing?.current_plan !== 'free') {  // Skip if already on a paid plan
+      console.info(`✅ User ${userId} already set up on ${existing.current_plan} plan`);
+      return
+    };
+
+    // 🔹 Determine the correct plan
     const plan = await determineBillingPlan(userId);
-    if (!plan) return;
+    if (!plan) {
+      console.error(`❌ Cannot determine billing plan for user ${userId}`);
+      return;
+    };
 
-    // Send notification if plan changes
+    // 🔹 Upsert billing entry
+    console.info(`🔄 Setting up user ${userId} on ${plan} plan`);
+    await supabase.from('billing').upsert(
+      { user_id: userId, current_plan: plan, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+
+    // 🔹 Send notification if upgraded
     if (plan !== 'free' && plan !== existing?.current_plan) {
-      await fetch(NOTIFICATION_URL, {
+      console.info(`📬 Sending notification to user ${userId}`);
+      fetch(NOTIFICATION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, message: `You've been upgraded to the ${plan} plan! 🎉` }),
       }).catch((err) => console.error('❌ Error sending notification:', err));
     }
-
-    // Upsert billing entry
-    await supabase.from('billing').upsert(
-      { user_id: userId, current_plan: plan, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' }
-    );
 
     console.info(`✅ User ${userId} set up on ${plan} plan`);
   } catch (err) {
@@ -169,16 +221,15 @@ async function setupUserBilling(userId: string) {
  */
 serve(async (req) => {
   try {
+    // Get the payload body, extract userId, and kick of the checks.
     const body = await req.json();
-
-    // Extract user ID from different possible payload formats
     const userId = body.user?.id || body.userId || body.user_id;
     if (!userId) {
       console.error('❌ Invalid webhook payload:', body);
       return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
     }
-
-    await setupUserBilling(userId);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 5000));
+    await Promise.race([setupUserBilling(userId), timeout]);
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
     console.error('❌ Unexpected error:', err);
