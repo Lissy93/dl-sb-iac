@@ -21,6 +21,7 @@
                                                             
 
 >> This repo contains the config, schema and edge functions for Domain Locker <<
+>>      See https://github.com/lissy93/domain-locker for the main project     <<
 
 ================================================================================
 DIRECTORY STRUCTURE
@@ -65,12 +66,13 @@ supabase functions deploy       # Deploy functions
 
 See the `Makefile` for all deployment commands.
 
-We use GitHub Actions for CI/CD.
-To deploy, just run `.github/workflows/supabase.yml`
+The easiest way to deploy is via GitHub Actions, which we use for CI/CD. 
+Just push to main or trigger the supabase.yml workflow, and it will deploy
 
-Required Env Vars for Deploying via GitHub Actions:
+You'll need to configure the following GitHub secrets to authenticate:
+  SUPABASE_PROJECT_ID     - The Supabase project ID
   SUPABASE_ACCESS_TOKEN   - The Supabase access token
-  SUPABASE_PROJECT_REF    - The Supabase project reference / ID
+  SUPABASE_DB_PASSWORD    - The Postgres password for your Supabase DB
   SUPABASE_ENV_FILE       - Raw text env vars for all else you need (see below)
 
 ================================================================================
@@ -192,6 +194,8 @@ We are not accepting feature requests or bug reports (except security issues).
 
 The difficulty of deploying this project is graded at moderate to hard
 You'll need a solid understanding of Deno, Supabase, Postgres and Docker
+
+It is also possible to run Domain Locker without Supabase, using Postgres only.
 
 ================================================================================
 NOTES
