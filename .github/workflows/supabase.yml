@@ -14,12 +14,11 @@ jobs:
       - name: 🛎️ Check out code
         uses: actions/checkout@v3
 
-      # 2) Install Supabase CLI
-      - name: ⏬ Install Supabase CLI
-        run: |
-          curl -L https://supabase.io/install.sh | sh
-          sudo mv supabase /usr/local/bin/supabase
-          supabase --version
+      # 2) Setup Supabase CLI
+      - name: 🚦Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
 
       # 3) Authenticate with Supabase
       - name: 🔑 Supabase Login
