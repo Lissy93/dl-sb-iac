@@ -22,7 +22,7 @@ jobs:
 
       # 3) Authenticate with Supabase
       - name: 🔑 Supabase Login
-        run: supabase login "${{ secrets.SUPABASE_ACCESS_TOKEN }}"
+        run: supabase login --token "${{ secrets.SUPABASE_ACCESS_TOKEN }}"
 
       # 4) Link the project
       - name: 🔗 Supabase Link
