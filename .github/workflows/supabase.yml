@@ -38,7 +38,9 @@ jobs:
         run: supabase config push
 
       # 7) Push the DB schema/migrations
-      - name: 🗃️ Supabase DB Push
+      - name: 🗃️ Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: supabase db push
 
       # 8) Set env vars in Supabase from GH secret named .env
