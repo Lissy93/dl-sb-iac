@@ -31,9 +31,11 @@ domain-locker-edge/
 │  ├─ migrations/   # Database schema
 │  ├─ templates/    # Mailer templates
 │  ╰─ config.toml   # Supabase configuration
+├─ .github/         # Repo admin, and GH Actions
+│  ├─ workflows/    # CI/CD files for deployment
+│  ╰─ README.txt    # You're looking at it ;)
 ├─ Makefile         # Project commands
 ├─ deno.json        # Deno project config
-├─ README.txt       # You're looking at it ;)
 ╰─ .gitignore       # Stuff to not commit
 
 ================================================================================
@@ -61,7 +63,15 @@ supabase config push            # Apply configuration
 supabase db push                # Deploy schema
 supabase functions deploy       # Deploy functions
 
-See the `Makefile` for all deployment commands. We use GitHub Actions for CI/CD.
+See the `Makefile` for all deployment commands.
+
+We use GitHub Actions for CI/CD.
+To deploy, just run `.github/workflows/supabase.yml`
+
+Required Env Vars for Deploying via GitHub Actions:
+  SUPABASE_ACCESS_TOKEN   - The Supabase access token
+  SUPABASE_PROJECT_REF    - The Supabase project reference / ID
+  SUPABASE_ENV_FILE       - Raw text env vars for all else you need (see below)
 
 ================================================================================
 ENVIRONMENT VARIABLES
@@ -122,6 +132,10 @@ Stripe and Billing:
 - checkout-session    Creates a new checkout session for a subscription
 - stripe-webhook      Handles incoming events triggered from Stripe
 - new-user-billing    Adds a billing record for new users + checks if sponsor
+
+User Management:
+- delete-account      Deletes a user account and all associated data
+- export-data         Exports all (selected) data for a user in a given format
 
 Domain Management:
 - trigger-updates     Selects all domains for users, and triggers domain-updater
