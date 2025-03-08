@@ -53,5 +53,5 @@ jobs:
 
       # 9) Deploy Edge Functions
       - name: 🛫 Deploy Edge Functions
-        run: supabase functions deploy --no-verify-jwt --force
+        run: supabase functions deploy --no-verify-jwt --force --project-ref $SUPABASE_PROJECT_ID
 
