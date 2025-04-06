@@ -1,26 +1,13 @@
 
- /$$$$$$$                                    /$$            
-| $$__  $$                                  |__/            
-| $$  \ $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$  /$$ /$$$$$$$   
-| $$  | $$ /$$__  $$| $$_  $$_  $$ |____  $$| $$| $$__  $$  
-| $$  | $$| $$  \ $$| $$ \ $$ \ $$  /$$$$$$$| $$| $$  \ $$  
-| $$  | $$| $$  | $$| $$ | $$ | $$ /$$__  $$| $$| $$  | $$  
-| $$$$$$$/|  $$$$$$/| $$ | $$ | $$|  $$$$$$$| $$| $$  | $$  
-|_______/  \______/ |__/ |__/ |__/ \_______/|__/|__/  |__/  
-                                                            
-                                                            
-                                                            
- /$$                           /$$                          
-| $$                          | $$                          
-| $$        /$$$$$$   /$$$$$$$| $$   /$$  /$$$$$$   /$$$$$$ 
-| $$       /$$__  $$ /$$_____/| $$  /$$/ /$$__  $$ /$$__  $$
-| $$      | $$  \ $$| $$      | $$$$$$/ | $$$$$$$$| $$  \__/
-| $$      | $$  | $$| $$      | $$_  $$ | $$_____/| $$      
-| $$$$$$$$|  $$$$$$/|  $$$$$$$| $$ \  $$|  $$$$$$$| $$      
-|________/ \______/  \_______/|__/  \__/ \_______/|__/      
-                                                            
+       ____                        _         _               _             
+      |  _ \  ___  _ __ ___   __ _(_)_ __   | |    ___   ___| | _____ _ __ 
+      | | | |/ _ \| '_ ` _ \ / _` | | '_ \  | |   / _ \ / __| |/ / _ \ '__|
+      | |_| | (_) | | | | | | (_| | | | | | | |__| (_) | (__|   <  __/ |   
+      |____/ \___/|_| |_| |_|\__,_|_|_| |_| |_____\___/ \___|_|\_\___|_|   
+                                                                           
 
 >> This repo contains the config, schema and edge functions for Domain Locker <<
+>> For the main project and app, see https://github.com/lissy93/domain-locker <<
 
 ================================================================================
 DIRECTORY STRUCTURE
@@ -31,9 +18,11 @@ domain-locker-edge/
 │  ├─ migrations/   # Database schema
 │  ├─ templates/    # Mailer templates
 │  ╰─ config.toml   # Supabase configuration
+├─ .github/         # Repo admin, and GH Actions
+│  ├─ workflows/    # CI/CD files for deployment
+│  ╰─ README.txt    # You're looking at it ;)
 ├─ Makefile         # Project commands
 ├─ deno.json        # Deno project config
-├─ README.txt       # You're looking at it ;)
 ╰─ .gitignore       # Stuff to not commit
 
 ================================================================================
@@ -61,8 +50,16 @@ supabase config push            # Apply configuration
 supabase db push                # Deploy schema
 supabase functions deploy       # Deploy functions
 
-We use GitHub Actions for CI/CD.
-The workflow builds, lints, tests and then deploys the project to staging
+See the `Makefile` for all deployment commands.
+
+The easiest way to deploy is via GitHub Actions, which we use for CI/CD. 
+Just push to main or trigger the supabase.yml workflow, and it will deploy
+
+You'll need to configure the following GitHub secrets to authenticate:
+  SUPABASE_PROJECT_ID     - The Supabase project ID
+  SUPABASE_ACCESS_TOKEN   - The Supabase access token
+  SUPABASE_DB_PASSWORD    - The Postgres password for your Supabase DB
+  SUPABASE_ENV_FILE       - Raw text env vars for all else you need (see below)
 
 ================================================================================
 ENVIRONMENT VARIABLES
@@ -80,8 +77,13 @@ Authentication
   SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET      - GitHub OAuth Secret
 
 API Endpoints:
-  AS93_DOMAIN_INFO_URL - The URL to our external domain info API
-  AS93_DOMAIN_INFO_KEY - And the key for the domain info API
+  AS93_DOMAIN_INFO_URL  - The URL to our external domain info API
+  AS93_DOMAIN_INFO_KEY  - And the key for the domain info API
+  AS93_SPONSORS_API     - The URL to our GitHub sponsors API
+
+Worker Endpoints:
+  WORKER_DOMAIN_UPDATER_URL - The URL to domain-updater function
+  WORKER_SEND_NOTIFICATION_URL - The URL to send-notification function
 
 Stripe:
   STRIPE_SECRET_KEY - Stripe secret key (starting with sk_live_ or sk_test_)
@@ -106,8 +108,9 @@ Twilio:
 Telegram
   TELEGRAM_BOT_TOKEN - The token for the telegram notification bot
 
-Don't forget to pass the env vars to Supabase, with:
-npx supabase secrets set --env-file supabase/functions/.env
+It's advisable to use a secret store for this. We use Supabase Vault.
+Or, you can pass secrets to Supabase, by running:
+supabase secrets set --env-file supabase/functions/.env
 
 ================================================================================
 FUNCTIONS
@@ -116,6 +119,11 @@ Stripe and Billing:
 - cancel-subscription Cancels a user's subscription
 - checkout-session    Creates a new checkout session for a subscription
 - stripe-webhook      Handles incoming events triggered from Stripe
+- new-user-billing    Adds a billing record for new users + checks if sponsor
+
+User Management:
+- delete-account      Deletes a user account and all associated data
+- export-data         Exports all (selected) data for a user in a given format
 
 Domain Management:
 - trigger-updates     Selects all domains for users, and triggers domain-updater
@@ -170,15 +178,17 @@ We do not provide support for this codebase. It is provided as-is.
 If you need help, please refer to the official docs for the services used.
 We are not accepting feature requests or bug reports (except security issues).
 
+The difficulty of deploying this project is graded at moderate to hard
+You'll need a solid understanding of Deno, Supabase, Postgres and Docker
+
+It is also possible to run Domain Locker without Supabase, using Postgres only.
+
 ================================================================================
 NOTES
 ================================================================================
-Do not modify anything in Supabase via the UI, as it will break everything.
-Update the TOML file, schema and function code here instead, then re-deploy.
-
-You must specify ALL environmental variables correctly for everything to work.
-
-It is your responsibility to maintain, secure and backup your Supabase instance.
+For troubleshooting, ensure protocol, method, port, headers and body are correct
+You must set and upload ALL environmental variables properly for things to work
+Avoid configuring in the Supabase UI, instead update the TOML file and re-deploy
 
 Example CURL request:
   curl -i --location \
@@ -188,6 +198,8 @@ Example CURL request:
     --data '{"name":"Dino"}'
 
 Or, for local dev, the URL would be: 127.0.0.1:54321/functions/v1/hello-world
+
+It is your responsibility to maintain, secure and backup your Supabase instance
 
 ================================================================================
 LICENSE

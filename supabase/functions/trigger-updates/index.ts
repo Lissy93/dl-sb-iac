@@ -13,9 +13,9 @@ const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 if (!DB_URL || !DB_KEY) {
-  throw new Error('Database URL and Key must be provided.');
+  throw new Error('❌ Database URL and Key must be provided.');
 }
-const DOMAIN_UPDATER_URL = 'https://domain-locker.supabase.co/functions/v1/domain-updater';
+const DOMAIN_UPDATER_URL = Deno.env.get('WORKER_DOMAIN_UPDATER_URL') ?? `${DB_URL}/functions/v1/domain-updater`;
 
 // Initialize Supabase client with superuser privileges to bypass RLS
 const supabase = createClient(

@@ -1,0 +1,60 @@
+name: 🚀 Deploy to Supabase
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Get the code
+      - name: 🛎️ Check out code
+        uses: actions/checkout@v3
+
+      # 2) Setup Supabase CLI
+      - name: 🚦Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # 3) Authenticate with Supabase
+      - name: 🔑 Supabase Login
+        run: supabase login --token "${{ secrets.SUPABASE_ACCESS_TOKEN }}"
+
+      # 4) Link the project
+      - name: 🔗 Supabase Link
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}"
+
+      # 5) Initialize the project if no exist yet
+      - name: 📃 Supabase Init (first-time only)
+        if: always()  # Or conditionally: if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: supabase db init || echo "DB already initialized"
+
+      # 6) Push the config
+      - name: 🔧 Supabase Config Push
+        run: supabase config push
+
+      # 7) Push the DB schema/migrations
+      - name: 🗃️ Apply database migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: yes | supabase db push
+
+      # 8) Set env vars in Supabase from GH secret named .env
+      - name: 🔐 Sync secrets to Supabase
+        run: |
+          echo "${{ secrets.SUPABASE_ENV_FILE }}" > .env
+          supabase secrets set --env-file=.env
+
+      # 9) Deploy Edge Functions
+      - name: 🛫 Deploy Edge Functions
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          supabase functions deploy --no-verify-jwt --project-ref $SUPABASE_PROJECT_ID
+
