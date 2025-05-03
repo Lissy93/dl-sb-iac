@@ -3,11 +3,16 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
 const stripeApiUrl = 'https://api.stripe.com/v1/subscriptions';
 
+const responseHeaders =  {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+};
+
 serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405 }
+      { headers: responseHeaders, status: 405 }
     );
   }
 
@@ -16,7 +21,7 @@ serve(async (req: Request) => {
     if (!body) {
       return new Response(
         JSON.stringify({ error: 'No request body provided' }),
-        { status: 400 }
+        { headers: responseHeaders, status: 400 },
       );
     }
 
@@ -24,7 +29,7 @@ serve(async (req: Request) => {
     if (!subscriptionId || typeof subscriptionId !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Invalid subscription ID' }),
-        { status: 400 }
+        { headers: responseHeaders, status: 400 }
       );
     }
 
@@ -54,7 +59,7 @@ serve(async (req: Request) => {
         subscriptionStatus: canceled.status,
         subscriptionId: canceled.id
       }),
-      { status: 200 }
+      { headers: responseHeaders, status: 200 }
     );
 
   } catch (err: any) {
@@ -72,7 +77,7 @@ serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { status: statusCode }
+      { headers: responseHeaders, status: statusCode }
     );
   }
 });
