@@ -2,23 +2,23 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@11.15.0?target=deno';
 
-// 🔹 Load environment variables
+// Load environment variables
 const DB_URL = Deno.env.get('DB_URL') ?? '';
 const DB_KEY = Deno.env.get('DB_KEY') ?? '';
 const SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
 const NOTIFICATION_URL = Deno.env.get('WORKER_SEND_NOTIFICATION_URL') ?? `${DB_URL}/functions/v1/send-notification`;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
-// 🔹 Ensure required environment variables are set
+// Ensure required environment variables are set
 if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
 if (!STRIPE_SECRET_KEY) console.warn('⚠️ Missing STRIPE_SECRET_KEY. Stripe billing checks will be skipped.');
 
-// 🔹 Initialize Supabase client (service role for RLS bypass)
+// Initialize Supabase client (service role for RLS bypass)
 const supabase = createClient(DB_URL, DB_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
 });
 
-// 🔹 Initialize Stripe client (if key is present)
+// Initialize Stripe client (if key is present)
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20.acacia' }) : null;
 
 const STRIPE_PLAN_MAPPING: Record<string, string> = {
@@ -81,7 +81,7 @@ export async function stripeBillingCheck(userId: string): Promise<string | null>
   try {
     console.info(`🔍 Checking Stripe subscription for user ${userId}`);
 
-    // 🔹 STEP 1: Fetch `customer_id` from Supabase
+    // STEP 1: Fetch `customer_id` from Supabase
     const { data: billingRecord, error } = await supabase
       .from('billing')
       .select('stripe_customer_id')
@@ -150,11 +150,11 @@ async function determineBillingPlan(userId: string): Promise<string> {
     return 'free';
   }
 
-  // 🔹 Check Stripe first (higher priority)
+  // Check Stripe first (higher priority)
   const stripePlan = await stripeBillingCheck(userId);
   if (stripePlan) return stripePlan;
 
-  // 🔹 Check GitHub sponsors
+  // Check GitHub sponsors
   const githubUsername = user.user_metadata?.user_name ?? user.user_metadata?.github_username;
   if (!githubUsername || user.app_metadata?.provider !== 'github') return 'free';
 
@@ -186,21 +186,24 @@ async function setupUserBilling(userId: string) {
       return
     };
 
-    // 🔹 Determine the correct plan
+    // Determine the correct plan
     const plan = await determineBillingPlan(userId);
     if (!plan) {
       console.error(`❌ Cannot determine billing plan for user ${userId}`);
       return;
     };
 
-    // 🔹 Upsert billing entry
+    // Upsert billing entry
     console.info(`🔄 Setting up user ${userId} on ${plan} plan`);
-    await supabase.from('billing').upsert(
-      { user_id: userId, current_plan: plan, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' }
-    );
 
-    // 🔹 Send notification if upgraded
+    const { error: updateError } = await supabase
+      .from('billing')
+      .update({ current_plan: plan, updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+
+    if (updateError) throw updateError;
+
+    // Send notification if upgraded
     if (plan !== 'free' && plan !== existing?.current_plan) {
       console.info(`📬 Sending notification to user ${userId}`);
       fetch(NOTIFICATION_URL, {
