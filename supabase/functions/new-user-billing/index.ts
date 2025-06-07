@@ -72,67 +72,46 @@ async function fetchGitHubSponsors(): Promise<Set<string>> {
  * Fetches the Stripe billing plan for a user.
  * Uses `customer_id` for efficient lookup.
  */
-export async function stripeBillingCheck(userId: string): Promise<string | null> {
-  if (!stripe) {
-    console.warn('⚠️ Stripe is not configured. Skipping billing checks.');
-    return null;
-  }
-
+async function getActiveStripePlan(customerId: string): Promise<string | null> {
   try {
-    console.info(`🔍 Checking Stripe subscription for user ${userId}`);
+    const url = `https://api.stripe.com/v1/customers/${customerId}/subscriptions?limit=1&expand[]=data.items`;
 
-    // STEP 1: Fetch `customer_id` from Supabase
-    const { data: billingRecord, error } = await supabase
-      .from('billing')
-      .select('meta')
-      .eq('user_id', userId)
-      .maybeSingle();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const customerId = billingRecord?.meta?.customer ?? null;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      },
+      signal: controller.signal,
+    });
 
-    if (error || !customerId) {
-      console.warn(`⚠️ No Stripe customer ID found for user ${userId}`);
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`⚠️ Stripe returned error for subscriptions: ${res.status} ${body}`);
       return null;
     }
 
-    // Query Stripe for active subscription using `customer_id`
-    const timeout = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('Stripe API request timed out')), 5000)
-    );
-
-    const stripeResponse = await Promise.race([
-      stripe.subscriptions.search({
-        query: `status:'active' AND customer:'${customerId}'`,
-        expand: ['data.items'],
-      }),
-      timeout,
-    ]);
-
-    if (!stripeResponse || !('data' in stripeResponse)) {
-      console.warn(`⚠️ No valid response from Stripe for user ${userId}`);
+    const data = await res.json();
+    const subscription = data?.data?.[0];
+    if (!subscription) {
+      console.info(`ℹ️ No active subscriptions found for customer ${customerId}`);
       return null;
     }
 
-    // Get active subscription details
-    const activeSubscription = stripeResponse.data[0];
-    if (!activeSubscription) {
-      console.info(`🔍 No active Stripe subscription found for user ${userId}`);
+    const lookupKey = subscription.items?.data?.[0]?.price?.lookup_key;
+    if (!lookupKey) {
+      console.warn(`⚠️ No price.lookup_key on active subscription for ${customerId}`);
       return null;
     }
 
-    // Extract plan ID from subscription
-    const priceId = activeSubscription.items.data[0]?.price?.lookup_key;
-    if (!priceId) {
-      console.warn(`⚠️ User ${userId} has an active subscription but no valid plan ID.`);
-      return null;
-    }
-
-    // Map to internal plan name
-    const mappedPlan = STRIPE_PLAN_MAPPING[priceId] || null;
-    console.info(`✅ User ${userId} has an active ${mappedPlan} plan via Stripe`);
-    return mappedPlan;
+    console.info(`✅ Found active Stripe plan: ${lookupKey} for ${customerId}`);
+    return STRIPE_PLAN_MAPPING[lookupKey] || null;
   } catch (err) {
-    console.error(`❌ Error checking Stripe subscription for user ${userId}:`, err);
+    console.error(`❌ Error fetching active subscription for ${customerId}:`, err);
     return null;
   }
 }
@@ -151,7 +130,7 @@ async function determineBillingPlan(userId: string): Promise<string> {
   }
 
   // Check Stripe first (higher priority)
-  const stripePlan = await stripeBillingCheck(userId);
+  const stripePlan = await getActiveStripePlan(userId);
   if (stripePlan) return stripePlan;
 
   // Check GitHub sponsors
@@ -255,66 +234,73 @@ async function createGetStripeCustomer(userId: string): Promise<string | null> {
  */
 async function setupUserBilling(userId: string) {
   console.log(`🔍 Checking billing for user ${userId}`);
+
   try {
-    // Fetch existing billing record
-    const { data: existing, error } = await supabase
+    // Step 1: Fetch billing record if it exists
+    const { data: existing, error: fetchError } = await supabase
       .from('billing')
-      .select('current_plan, meta')
+      .select('current_plan, meta, created_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    console.info(`🔍 User ${userId} current plan: ${existing?.current_plan}`);
+    const currentPlan = existing?.current_plan ?? 'free';
+    const existingMeta = existing?.meta ?? {};
+    console.info(`ℹ️ User ${userId} current plan: ${currentPlan}`);
 
-    if (error && error.code !== 'PGRST116') { // Trow error if cannot read billing table
-      console.error('❌ Error fetching billing record:', error);
-      throw error;
-    }
-    if (existing?.current_plan && existing?.current_plan !== 'free') {  // Skip if already on a paid plan
-      console.info(`✅ User ${userId} already set up on ${existing.current_plan} plan`);
-      return
-    };
-
-    // Determine the correct plan
-    const plan = await determineBillingPlan(userId);
-    if (!plan) {
-      console.error(`❌ Cannot determine billing plan for user ${userId}`);
+    // Step 2: Determine correct plan
+    const newPlan = await determineBillingPlan(userId);
+    if (!newPlan) {
+      console.error(`❌ Could not determine billing plan for user ${userId}`);
       return;
-    };
-
-    const customerId = await createGetStripeCustomer(userId);
-    console.log('===> Customer ID', customerId);
-
-    const userMeta = existing?.meta || {};
-    const newMeta = {
-      ...userMeta,
-      customer: customerId,
     }
 
-    // Upsert billing entry
-    console.info(`🔄 Setting up user ${userId} on ${plan} plan`);
+    // Step 3: Get Stripe customer ID (may create if missing)
+    const stripeCustomerId = await createGetStripeCustomer(userId);
 
-    const { error: updateError } = await supabase
+    // Step 4: Build updated meta object
+    const updatedMeta = {
+      ...existingMeta,
+      ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
+    };
+
+    // Step 5: Insert or update billing record
+    const timestamp = new Date().toISOString();
+
+    const { error: upsertError } = await supabase
       .from('billing')
-      .update({ current_plan: plan, updated_at: new Date().toISOString(), meta: newMeta })
-      .eq('user_id', userId);
+      .upsert(
+        {
+          user_id: userId,
+          current_plan: newPlan,
+          meta: updatedMeta,
+          updated_at: timestamp,
+          created_at: existing?.created_at ?? timestamp,
+        },
+        { onConflict: 'user_id' }
+      );
 
-    if (updateError) throw updateError;
+    if (upsertError) throw upsertError;
 
-    // Send notification if upgraded
-    if (plan !== 'free' && plan !== existing?.current_plan) {
-      console.info(`📬 Sending notification to user ${userId}`);
+    // Step 6: Notify user only if plan has changed and is not "free"
+    const shouldNotify = newPlan !== 'free' && newPlan !== currentPlan;
+    if (shouldNotify) {
+      console.info(`📬 Sending billing upgrade notification to ${userId}`);
       fetch(NOTIFICATION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, message: `You've been upgraded to the ${plan} plan! 🎉` }),
+        body: JSON.stringify({
+          userId,
+          message: `You've been upgraded to the ${newPlan} plan! 🎉`,
+        }),
       }).catch((err) => console.error('❌ Error sending notification:', err));
     }
 
-    console.info(`✅ User ${userId} set up on ${plan} plan`);
+    console.info(`✅ Billing setup complete for ${userId} — Plan: ${newPlan}`);
   } catch (err) {
-    console.error('❌ Error setting up billing:', err);
+    console.error(`❌ Billing setup failed for user ${userId}:`, err);
   }
 }
+
 
 /**
  * Supabase Edge Function: Handles user signup events and manual re-checks.
