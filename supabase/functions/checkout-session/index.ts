@@ -87,8 +87,8 @@ serve(async (req: Request) => {
     const priceId = getEnvVar(envVarName);
 
     // 4) Build the payload to send to Stripe
-    const finalSuccessUrl = (callbackUrl || APP_BASE_URL) + '/settings/upgrade?success=1';
-    const finalCancelUrl  = (callbackUrl  || APP_BASE_URL) + '/settings/upgrade?canceled=1';
+    const finalSuccessUrl = (callbackUrl || APP_BASE_URL);
+    const finalCancelUrl  = (callbackUrl  || APP_BASE_URL);
 
     const line_items = [{ price: priceId, quantity: 1 }];
     const subscription_data = { metadata: { user_id: userId } };

@@ -45,7 +45,7 @@ async function fetchDomainData(domain: string) {
     const data = await response.json();
     return data.body.domainInfo;
   } catch (error) {
-    console.error(`Error fetching domain data: ${error.message}`);
+    console.error(`Error fetching domain data: ${(error as Error).message}`);
     throw error;
   }
 }
@@ -87,6 +87,7 @@ const fieldToHumanName: Record<string, string> = {
 
 // Function to check notification preferences and insert notification if enabled
 async function checkAndInsertNotification(domainId: string, userId: string, changeType: string, field: string, oldValue: any, newValue: any) {
+  
   // Map changeType to the relevant notification type
   const notificationType = changeTypeToNotificationType[field];
   
@@ -101,33 +102,44 @@ async function checkAndInsertNotification(domainId: string, userId: string, chan
     .select('is_enabled')
     .eq('domain_id', domainId)
     .eq('notification_type', notificationType)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    console.error(`Error checking notification preference for type "${notificationType}": ${error.message}`);
+    console.error(`Error checking notification preference for type "${notificationType}"`, error.message);
     return;
   }
 
   // If the notification is enabled, insert a new notification into the notifications table
-  if (preference?.is_enabled) {
-    const humanFieldName = fieldToHumanName[field] || field;
-    let message;
-    if (oldValue === null || oldValue === 'Unknown') {
-      message = `${humanFieldName} was added "${newValue}"`;
-    } else if (newValue === null || newValue === 'Unknown') {
-      message = `${humanFieldName} was removed "${oldValue}"`;
-    } else {
-      message = `The ${humanFieldName} for your domain has changed from "${oldValue}" to "${newValue}".`;
-    }
+  const isEnabled = preference?.is_enabled ?? false;
+  if (!isEnabled) {
+    console.debug(`🔕 notifications for ${notificationType} are off.`);
+    return;
+  }
+  const humanFieldName = fieldToHumanName[field] || field;
+  let message;
+  if (oldValue === null || oldValue === 'Unknown') {
+    message = `${humanFieldName} was added "${newValue}"`;
+  } else if (newValue === null || newValue === 'Unknown') {
+    message = `${humanFieldName} was removed "${oldValue}"`;
+  } else {
+    message = `The ${humanFieldName} for your domain has changed from "${oldValue}" to "${newValue}".`;
+  }
 
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      domain_id: domainId,
+  console.log(`Inserting notification for ${notificationType}: ${message}`);
+
+  const { data: _data, error: notificationInsertionError } = await supabase
+    .from('notifications')
+    .insert({
+      user_id:     userId,
+      domain_id:   domainId,
       change_type: field,
-      message: message,
-      sent: false,
-      read: false,
+      message,
+      sent:        false,
+      read:        false,
     });
+
+  if (notificationInsertionError) {
+    console.error('❌ Insertion of notification failed:', notificationInsertionError);
   }
 }
 
@@ -314,7 +326,25 @@ async function updateDomainData(domainId: string, userId: string, domainInfo: an
 
 // Serve function for Supabase
 serve(async (req) => {
-  const { domain, user_id } = await req.json();
+
+  let domain = '';
+  let user_id = '';
+
+  // Check this is the right request method
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ message: '❌ Invalid request method' }), { status: 405 });
+  }
+  // Check we can read the request body, and set domain + user_id
+  try {
+    const body = await req.json();
+    domain = body.domain;
+    user_id = body.user_id;
+  } catch (error) {
+    console.error(`Error parsing request body: ${(error as Error).message}`);
+    return new Response(JSON.stringify({ message: '❌ Invalid request body' }), { status: 400 });
+  }
+
+  // Check we have a non-empty domain and user_id
   if (!domain || !user_id) {
     return new Response(JSON.stringify({ message: '❌ Domain could not be updated', error: 'Missing params, domain and/or user_id' }), {
       status: 500,
@@ -322,6 +352,7 @@ serve(async (req) => {
     });
   }
   
+  // Ensure we have the required env vars for the DB
   if (!DB_URL || !DB_KEY) {
     return new Response(JSON.stringify({ message: `❌ ${domain} could not be updated`, error: 'Missing DB URL and/or KEY' }), {
       status: 500,
@@ -330,8 +361,10 @@ serve(async (req) => {
   }
 
   try {
-    const domainInfo = await fetchDomainData(domain);
-    const { data: domainRecord, error } = await supabase
+    // Fetch the latest domain info
+    const newDomainInfo = await fetchDomainData(domain);
+    // Fetch the current domain data
+    const { data: currentDomainRecord, error } = await supabase
       .from('domains')
       .select(`
         *,
@@ -344,13 +377,19 @@ serve(async (req) => {
       `)
       .eq('domain_name', domain)
       .eq('user_id', user_id)
-      .single();
+      .maybeSingle();
 
-    if (error || !domainRecord) {
-      return new Response('Domain not found for user', { status: 404 });
+    if (error) {
+      console.error(`Error fetching domain record: ${error.message}`);
+      return new Response(JSON.stringify({ message: '❌ Error fetching domain record', error: error.message }), { status: 500 });
     }
 
-    await updateDomainData(domainRecord.id, user_id, domainInfo, domainRecord);
+    if (!currentDomainRecord) {
+      return new Response(JSON.stringify({ message: '❌ Domain not found for user' }), { status: 404 });
+    }
+
+    // Trigger an update and comparison of domain data
+    await updateDomainData(currentDomainRecord.id, user_id, newDomainInfo, currentDomainRecord);
 
     return new Response(JSON.stringify({ message: `✅ ${domain} updates successfully: ${changeCount} changes.` }), {
       status: 200,
