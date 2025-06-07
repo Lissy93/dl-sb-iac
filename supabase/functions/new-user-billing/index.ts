@@ -84,16 +84,16 @@ export async function stripeBillingCheck(userId: string): Promise<string | null>
     // STEP 1: Fetch `customer_id` from Supabase
     const { data: billingRecord, error } = await supabase
       .from('billing')
-      .select('stripe_customer_id')
+      .select('meta')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error || !billingRecord?.stripe_customer_id) {
+    const customerId = billingRecord?.meta?.customer ?? null;
+
+    if (error || !customerId) {
       console.warn(`⚠️ No Stripe customer ID found for user ${userId}`);
       return null;
     }
-
-    const customerId = billingRecord.stripe_customer_id;
 
     // Query Stripe for active subscription using `customer_id`
     const timeout = new Promise<null>((_, reject) =>
@@ -163,6 +163,94 @@ async function determineBillingPlan(userId: string): Promise<string> {
 }
 
 /**
+ * Creates a new Stripe customer, if one doesn't yet exist
+ * @param userId 
+ * @returns 
+ */
+async function createGetStripeCustomer(userId: string): Promise<string | null> {
+  if (!STRIPE_SECRET_KEY) {
+    console.warn('⚠️ Stripe not configured.');
+    return null;
+  }
+
+  try {
+    console.info(`🔍 Looking up Stripe customer for user ${userId}`);
+
+    // 1. Get user info (email required)
+    const { data: userRes, error: userErr } = await supabase.auth.admin.getUserById(userId);
+    const user = userRes?.user;
+    const email = user?.email;
+    if (userErr || !user || !email) {
+      console.warn(`⚠️ Missing user or email for ${userId}`);
+      return null;
+    }
+
+    // 2. Check billing.meta.customer
+    const { data: billing, error: billingErr } = await supabase
+      .from('billing')
+      .select('meta')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const existingId = billing?.meta?.customer;
+    if (existingId) {
+      console.info(`✅ Found Stripe customer in billing.meta: ${existingId}`);
+      return existingId;
+    }
+
+    // 3. Search Stripe for existing customer (metadata or email)
+    const metaQuery = encodeURIComponent(`metadata['user_id']:'${userId}'`);
+    const metaRes = await fetch(`https://api.stripe.com/v1/customers/search?query=${metaQuery}`, {
+      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+    });
+    const metaData = await metaRes.json();
+    if (metaRes.ok && metaData?.data?.length > 0) {
+      const foundId = metaData.data[0].id;
+      console.info(`✅ Found Stripe customer via metadata: ${foundId}`);
+      return foundId;
+    }
+
+    const emailRes = await fetch(`https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`, {
+      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+    });
+    const emailData = await emailRes.json();
+    if (emailRes.ok && emailData?.data?.length > 0) {
+      const foundId = emailData.data[0].id;
+      console.info(`✅ Found Stripe customer via email: ${foundId}`);
+      return foundId;
+    }
+
+    // 4. Create new customer
+    const createRes = await fetch('https://api.stripe.com/v1/customers', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        email,
+        name: user.user_metadata?.full_name ?? '',
+        'metadata[user_id]': userId,
+      }),
+    });
+
+    const customer = await createRes.json();
+    if (!createRes.ok || !customer?.id) {
+      console.error('❌ Failed to create Stripe customer:', customer);
+      return null;
+    }
+
+    console.info(`🆕 Created new Stripe customer: ${customer.id}`);
+    return customer.id;
+  } catch (err) {
+    console.error(`❌ Stripe customer setup failed for ${userId}:`, err);
+    return null;
+  }
+}
+
+
+
+/**
  * Ensures the user has a billing entry with the correct plan.
  */
 async function setupUserBilling(userId: string) {
@@ -171,7 +259,7 @@ async function setupUserBilling(userId: string) {
     // Fetch existing billing record
     const { data: existing, error } = await supabase
       .from('billing')
-      .select('current_plan')
+      .select('current_plan, meta')
       .eq('user_id', userId)
       .single();
 
@@ -193,12 +281,21 @@ async function setupUserBilling(userId: string) {
       return;
     };
 
+    const customerId = await createGetStripeCustomer(userId);
+    console.log('===> Customer ID', customerId);
+
+    const userMeta = existing?.meta || {};
+    const newMeta = {
+      ...userMeta,
+      customer: customerId,
+    }
+
     // Upsert billing entry
     console.info(`🔄 Setting up user ${userId} on ${plan} plan`);
 
     const { error: updateError } = await supabase
       .from('billing')
-      .update({ current_plan: plan, updated_at: new Date().toISOString() })
+      .update({ current_plan: plan, updated_at: new Date().toISOString(), meta: newMeta })
       .eq('user_id', userId);
 
     if (updateError) throw updateError;
