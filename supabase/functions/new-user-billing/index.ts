@@ -121,7 +121,7 @@ async function getActiveStripePlan(customerId: string): Promise<string | null> {
  * Determines the correct billing plan for a user.
  * Prioritizes Stripe over GitHub sponsorships.
  */
-async function determineBillingPlan(userId: string): Promise<string> {
+async function determineBillingPlan(userId: string, stripeCustomerId: string | null): Promise<string> {
   console.info('🔍 Determining appropriate billing plan for user')
   const user = await getUser(userId);
   if (!user) {
@@ -130,8 +130,10 @@ async function determineBillingPlan(userId: string): Promise<string> {
   }
 
   // Check Stripe first (higher priority)
-  const stripePlan = await getActiveStripePlan(userId);
-  if (stripePlan) return stripePlan;
+  if (stripeCustomerId) {
+    const stripePlan = await getActiveStripePlan(stripeCustomerId);
+    if (stripePlan) return stripePlan;
+  }
 
   // Check GitHub sponsors
   const githubUsername = user.user_metadata?.user_name ?? user.user_metadata?.github_username;
@@ -247,15 +249,17 @@ async function setupUserBilling(userId: string) {
     const existingMeta = existing?.meta ?? {};
     console.info(`ℹ️ User ${userId} current plan: ${currentPlan}`);
 
+    // Step 3: Get Stripe customer ID (may create if missing)
+    const stripeCustomerId = await createGetStripeCustomer(userId);
+
     // Step 2: Determine correct plan
-    const newPlan = await determineBillingPlan(userId);
+    const newPlan = await determineBillingPlan(userId, stripeCustomerId);
     if (!newPlan) {
       console.error(`❌ Could not determine billing plan for user ${userId}`);
       return;
     }
 
-    // Step 3: Get Stripe customer ID (may create if missing)
-    const stripeCustomerId = await createGetStripeCustomer(userId);
+
 
     // Step 4: Build updated meta object
     const updatedMeta = {

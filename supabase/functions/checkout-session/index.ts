@@ -1,4 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const DB_URL = Deno.env.get('DB_URL') ?? '';
+const DB_KEY = Deno.env.get('DB_KEY') ?? '';
+const supabase = createClient(DB_URL, DB_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+});
 
 /** Helper to get env var, or fallback, or throw error. */
 function getEnvVar(name: string, fallback?: string): string {
@@ -87,12 +94,38 @@ serve(async (req: Request) => {
     const priceId = getEnvVar(envVarName);
 
     // 4) Build the payload to send to Stripe
-    const finalSuccessUrl = (callbackUrl || APP_BASE_URL);
-    const finalCancelUrl  = (callbackUrl  || APP_BASE_URL);
+    const cancelUrl  = new URL(callbackUrl  || APP_BASE_URL);
+    cancelUrl.searchParams.set('canceled', 'true');
+    const finalCancelUrl = cancelUrl.toString();
+
+    const successUrl = new URL(callbackUrl || APP_BASE_URL);
+    successUrl.searchParams.set('refresh', 'true');
+    successUrl.searchParams.set('success', 'true');
+    const finalSuccessUrl = successUrl.toString();
 
     const line_items = [{ price: priceId, quantity: 1 }];
+    
     const subscription_data = { metadata: { user_id: userId } };
-    const payload = {
+    let customerId = null;
+
+    try {
+      const { data: billing } = await supabase
+        .from('billing')
+        .select('meta')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const existingCustomerId = billing?.meta?.customer;
+      
+      if (existingCustomerId) {
+        customerId = existingCustomerId;
+        console.info(`✅ Using existing Stripe customer: ${existingCustomerId}`);
+      }
+    } catch (err) {
+      console.error('Error fetching customer ID', err);
+    }
+
+    const payload: any = {
       line_items,
       mode: 'subscription',
       subscription_data,
@@ -100,6 +133,10 @@ serve(async (req: Request) => {
       cancel_url: finalCancelUrl,
       allow_promotion_codes: true,
     };
+
+    if (customerId) {
+      payload.customer = customerId;
+    }
 
     // Flatten + encode
     const formBody = new URLSearchParams(flattenObject(payload)).toString();

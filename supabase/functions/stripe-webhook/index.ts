@@ -79,13 +79,14 @@ async function handleSubscriptionUpdated(event: any) {
   const userId = invoice.metadata?.user_id || invoice.subscription_details?.metadata?.user_id;
   const billingReason = invoice.billing_reason;
   const totalAmount = invoice.total;
+  
 
   if (!userId) {
     logError(`${event.type}: No user_id in subscription metadata`, { invoice });
     return;
   }
-
-  if (invoice.plan.status === 'incomplete') {
+  
+  if (invoice?.status === 'incomplete') {
     logInfo(`Incomplete subscription for user ${userId}, ignoring`);
     return
   }

@@ -3,12 +3,22 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
 const stripeApiUrl = 'https://api.stripe.com/v1/subscriptions';
 
-const responseHeaders =  {
-  'Content-Type': 'application/json',
+const responseHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+  'Content-Type': 'application/json',
 };
 
 serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: responseHeaders,
+      status: 204,
+    });
+  }
+
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
@@ -38,7 +48,7 @@ serve(async (req: Request) => {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${stripeSecretKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
         'invoice_now': 'true',  // Immediately generates the final invoice
@@ -57,7 +67,7 @@ serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         subscriptionStatus: canceled.status,
-        subscriptionId: canceled.id
+        subscriptionId: canceled.id,
       }),
       { headers: responseHeaders, status: 200 }
     );
