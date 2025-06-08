@@ -1,7 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
-const stripeApiUrl = 'https://api.stripe.com/v1/subscriptions';
+const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') || '';
+const SUPABASE_URL = Deno.env.get('DB_URL') || '';
+const SUPABASE_KEY = Deno.env.get('DB_KEY') || '';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const responseHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,81 +17,81 @@ const responseHeaders = {
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: responseHeaders,
-      status: 204,
-    });
+    return new Response(null, { headers: responseHeaders, status: 204 });
   }
 
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({ error: 'Method not allowed' }),
-      { headers: responseHeaders, status: 405 }
-    );
+    return jsonResponse({ error: 'Only POST allowed' }, 405);
   }
 
   try {
     const body = await req.json();
-    if (!body) {
-      return new Response(
-        JSON.stringify({ error: 'No request body provided' }),
-        { headers: responseHeaders, status: 400 },
-      );
+    const userId = body?.userId;
+
+    if (!userId || typeof userId !== 'string') {
+      return jsonResponse({ error: 'Missing or invalid userId' }, 400);
     }
 
-    const { subscriptionId } = body;
-    if (!subscriptionId || typeof subscriptionId !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Invalid subscription ID' }),
-        { headers: responseHeaders, status: 400 }
-      );
+    // Step 1: Fetch Stripe customer ID from billing.meta
+    const { data: billing, error } = await supabase
+      .from('billing')
+      .select('meta')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const customerId = billing?.meta?.customer;
+    if (error || !customerId) {
+      return jsonResponse({ error: 'No Stripe customer found for this user' }, 404);
     }
 
-    // 🔥 Use DELETE to cancel subscription immediately
-    const response = await fetch(`${stripeApiUrl}/${subscriptionId}`, {
+    // Step 2: Fetch active subscription from Stripe
+    const subRes = await fetch(`https://api.stripe.com/v1/customers/${customerId}/subscriptions?limit=1`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+    });
+
+    const subData = await subRes.json();
+    const subscription = subData?.data?.[0];
+
+    if (!subRes.ok || !subscription?.id) {
+      return jsonResponse({ error: 'No active subscription found for this user' }, 404);
+    }
+
+    // Step 3: Cancel the subscription
+    const cancelRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subscription.id}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${stripeSecretKey}`,
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        'invoice_now': 'true',  // Immediately generates the final invoice
-        'prorate': 'true'       // Adjust final invoice based on usage
-      }).toString()
+        invoice_now: 'true',
+        prorate: 'true',
+      }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Stripe API request failed');
+    const cancelData = await cancelRes.json();
+
+    if (!cancelRes.ok) {
+      throw new Error(cancelData.error?.message || 'Stripe cancellation failed');
     }
 
-    const canceled = await response.json();
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        subscriptionStatus: canceled.status,
-        subscriptionId: canceled.id,
-      }),
-      { headers: responseHeaders, status: 200 }
-    );
+    return jsonResponse({
+      success: true,
+      userId,
+      subscriptionId: cancelData.id,
+      subscriptionStatus: cancelData.status,
+    }, 200);
 
   } catch (err: any) {
-    console.error('Cancel Subscription Error:', err);
-    let errorMessage = err.message;
-    let statusCode = 400;
-
-    if (err.type === 'StripeCardError' || err.type === 'StripeInvalidRequestError') {
-      errorMessage = 'Invalid request to Stripe';
-      statusCode = 400;
-    } else if (err.type === 'StripeAuthenticationError') {
-      errorMessage = 'Authentication failed';
-      statusCode = 401;
-    }
-
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { headers: responseHeaders, status: statusCode }
-    );
+    console.error('❌ Cancel Subscription Error:', err);
+    return jsonResponse({ error: err.message || 'Unexpected error' }, 500);
   }
 });
+
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: responseHeaders,
+  });
+}
