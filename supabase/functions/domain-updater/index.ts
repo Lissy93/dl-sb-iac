@@ -6,7 +6,8 @@
  */
 
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
+
 
 // Keys
 const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
@@ -17,14 +18,7 @@ const AS93_DOMAIN_INFO_KEY = Deno.env.get('AS93_DOMAIN_INFO_KEY') ?? '';
 
 let changeCount = 0;
 
-// Initialize Supabase client with superuser privileges
-const supabase = createClient(DB_URL, DB_KEY, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
-});
+let supabase: ReturnType<typeof getSupabaseClient>;
 
 // Fetch domain data from the DigitalOcean serverless endpoint
 async function fetchDomainData(domain: string) {
@@ -326,6 +320,8 @@ async function updateDomainData(domainId: string, userId: string, domainInfo: an
 
 // Serve function for Supabase
 serve(async (req) => {
+
+  supabase = getSupabaseClient(req);
 
   let domain = '';
   let user_id = '';

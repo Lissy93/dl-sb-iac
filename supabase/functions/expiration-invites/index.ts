@@ -1,17 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabase = createClient(
-  Deno.env.get('DB_URL')!,
-  Deno.env.get('DB_KEY')!
-);
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const RESEND_SENDER = Deno.env.get('RESEND_SENDER') || 'reminders@domain-locker.com';
 
 const APP_BASE_URL = Deno.env.get('DL_BASE_URL') || 'https://domain-locker.com';
 
-serve(async () => {
+serve(async (req) => {
+
+  const supabase = getSupabaseClient(req);
+  
   console.log('🔁 Checking for expiring domains');
 
   const targetDate = new Date();
@@ -100,15 +99,6 @@ Manage all your domains here: ${APP_BASE_URL}`;
         console.error(`❌ Failed to send invite to ${email}:`, err);
         continue;
       }
-      
-      await supabase.from('notifications').insert({
-        user_id,
-        domain_id: domain.id,
-        change_type: 'reminder',
-        message: `Domain ${domain_name} expiring in 90 days.`  +  (registrar ? `Renew it on ${registrar}.` : ''),
-        sent: true,
-        read: false
-      });
     } catch (err) {
       console.error('❌ Failed processing domain:', err);
     }
