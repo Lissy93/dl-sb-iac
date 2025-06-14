@@ -13,8 +13,11 @@
 
 
 // Import Edge Runtime and required libraries for Supabase
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
+import { Logger } from '../shared/logger.ts';
+import { Monitor } from '../shared/monitor.ts';
 
 import { NotificationPreferences } from "./types.ts";
 import { sendWebHookNotification } from "./senders/webhook.ts";
@@ -23,26 +26,23 @@ import { sendSlackNotification } from "./senders/slack.ts";
 import { sendSmsNotification } from "./senders/sms.ts";
 import { sendWhatsAppNotification } from "./senders/whatsapp.ts";
 
-const DB_URL = Deno.env.get('DB_URL') ?? '';
-const DB_KEY = Deno.env.get('DB_KEY') ?? '';
+const logger = new Logger('send-notification', {
+  centralLogUrl: Deno.env.get('DL_LOGGING_ENDPOINT'),
+});
+const monitor = new Monitor('send-notification');
 
 // Function entry point
 Deno.serve(async (req) => {
 
-  const supabase = createClient(DB_URL, DB_KEY, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
+  await monitor.start();
+  const supabase = getSupabaseClient(req);
 
-  try {
-    // Step 1: Read userId and message from the input body
+   try {
+    // Read the userId and notification message from the request body
     const body = await req.json();
     let userId: string;
     let message: string;
-    
+
     if (body.type === 'INSERT' && body.record?.new) {
       // This is a database webhook trigger from notifications table
       userId = body.record.new.user_id;
@@ -54,83 +54,81 @@ Deno.serve(async (req) => {
     }
 
     if (!userId || !message) {
+      logger.warn('Missing userId or message');
       return new Response(
-        JSON.stringify({ error: "userId and message are required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: 'userId and message are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Step 2: Fetch user's notification preferences
-    const { data, error } = await supabase
+    // Get notification preferences
+    const { data: userInfo, error: userError } = await supabase
       .from('user_info')
-      .select('notification_channels')  
+      .select('notification_channels')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      console.error("Error fetching user info:", error || "User not found");
+    if (userError || !userInfo) {
+      logger.error(`User not found or error fetching preferences for ${userId}`);
       return new Response(
-        JSON.stringify({ error: "User not found or error fetching preferences" }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: 'User not found or error fetching preferences' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Fetch user's current plan from the billing table
+    // Fetch billing plan to determine notification channels
     const { data: billingData } = await supabase
       .from('billing')
       .select('current_plan')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    // If the user's plan is 'free', remove all notification channels except email
-    if (billingData && billingData.current_plan === 'free') {
-      const emailChannel = data.notification_channels.email;
-      data.notification_channels = { email: emailChannel };
-    }
-
-    const notificationChannels = (data.notification_channels || {}) as NotificationPreferences;
-
-    // Step 3: For each enabled channel, send the message using the corresponding channel function
-    if (notificationChannels.email?.enabled) {
-      await sendEmailNotification(notificationChannels.email, message);
-    }
-    if (notificationChannels.pushNotification?.enabled) {
-      await sendPushNotification(notificationChannels.pushNotification, message);
-    }
-    if (notificationChannels.webHook?.enabled) {
-      await sendWebHookNotification(notificationChannels.webHook, message);
-    }
-    if (notificationChannels.signal?.enabled) {
-      await sendSignalNotification(notificationChannels.signal, message);
-    }
-    if (notificationChannels.telegram?.enabled) {
-      await sendTelegramNotification(notificationChannels.telegram, message);
-    }
-    if (notificationChannels.slack?.enabled) {
-      await sendSlackNotification(notificationChannels.slack, message);
-    }
-    if (notificationChannels.matrix?.enabled) {
-      await sendMatrixNotification(notificationChannels.matrix, message);
-    }
-    if (notificationChannels.whatsapp?.enabled) {
-      await sendWhatsAppNotification(notificationChannels.whatsapp, message);
-    }
-    if (notificationChannels.sms?.enabled) {
-      await sendSmsNotification(notificationChannels.sms, message);
+    // Get notification channels from user info
+    const rawChannels = userInfo.notification_channels || {};
+    
+    // If user is on a free plan, restrict notification channels to just email
+    if (billingData?.current_plan === 'free') {
+      Object.keys(rawChannels).forEach((k) => {
+        if (k !== 'email') delete rawChannels[k];
+      });
     }
 
-    const numberOfActiveChannels = Object.values(notificationChannels).filter((channel) => channel.enabled).length || 0;
+    const prefs = rawChannels as NotificationPreferences;
 
-    return new Response(
-      JSON.stringify({ message: `✅ Notifications sent successfully to ${numberOfActiveChannels} channels` }),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Error processing notification:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal Server Error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    // Dispatch each enabled notification channel
+    const sendOps: Promise<void>[] = [];
+
+    if (prefs.email?.enabled) sendOps.push(sendEmailNotification(prefs.email, message));
+    if (prefs.pushNotification?.enabled) sendOps.push(sendPushNotification(prefs.pushNotification, message));
+    if (prefs.webHook?.enabled) sendOps.push(sendWebHookNotification(prefs.webHook, message));
+    if (prefs.signal?.enabled) sendOps.push(sendSignalNotification(prefs.signal, message));
+    if (prefs.telegram?.enabled) sendOps.push(sendTelegramNotification(prefs.telegram, message));
+    if (prefs.slack?.enabled) sendOps.push(sendSlackNotification(prefs.slack, message));
+    if (prefs.matrix?.enabled) sendOps.push(sendMatrixNotification(prefs.matrix, message));
+    if (prefs.whatsapp?.enabled) sendOps.push(sendWhatsAppNotification(prefs.whatsapp, message));
+    if (prefs.sms?.enabled) sendOps.push(sendSmsNotification(prefs.sms, message));
+
+    await Promise.allSettled(sendOps);
+
+    const activeChannels = Object.values(prefs).filter((c) => c?.enabled).length || 0;
+    const resultMessage = `✅ Sent to ${activeChannels} channels`;
+
+    logger.info(resultMessage);
+    await logger.flushToRemote();
+    await monitor.success(resultMessage);
+
+    return new Response(JSON.stringify({ message: resultMessage }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  } catch (err: any) {
+    logger.error(`Unhandled error: ${err.message}`);
+    await logger.flushToRemote();
+    await monitor.fail(err);
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 });
 
