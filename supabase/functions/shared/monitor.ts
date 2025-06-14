@@ -5,6 +5,13 @@
  */
 
 
+const enabledMonitors = [
+  'trigger-updates',
+  'expiration-invites',
+  'expiration-reminders',
+  'website-monitor',
+];
+
 export interface MonitorOptions {
   healthcheckUrl?: string;           // healthchecks.io UUID ping URL
   glitchtipUrl?: string;             // GlitchTip endpoint (optional)
@@ -18,12 +25,15 @@ export class Monitor {
   private glitchtipUrl?: string;
   private glitchtipToken?: string;
   private jobName?: string;
+  private enabled: boolean = false;
 
   constructor(jobName: string, opts: MonitorOptions = {}) {
     this.jobName = jobName;
     this.healthcheckUrl = opts.healthcheckUrl || Deno.env.get('HC_URL');
     this.glitchtipUrl = opts.glitchtipUrl || Deno.env.get('GLITCHTIP_URL');
     this.glitchtipToken = opts.glitchtipToken || Deno.env.get('GLITCHTIP_TOKEN');
+
+    this.enabled = enabledMonitors.includes(jobName);
 
     if (opts.notifyOnStart) {
       this.ping('start');
@@ -54,6 +64,7 @@ export class Monitor {
   // Ping healthchecks.io
   private ping(type?: 'start' | 'fail' | 'success', message?: string) {
     if (!this.healthcheckUrl) return;
+    if (!this.enabled) return;
     let url = `${this.healthcheckUrl}/${this.jobName}`;
 
     let method: 'GET' | 'POST' = 'GET';
