@@ -7,9 +7,11 @@
 
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
+import { Monitor } from '../shared/monitor.ts';
 
 // Keys
 const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
+const monitor = new Monitor('trigger-updates');
 
 if (!DB_URL) {
   throw new Error('❌ Database URL and Key must be provided.');
@@ -54,7 +56,7 @@ async function processAllDomains(req: any) {
 
   if (error || !domains) {
     console.error('Error fetching domains:', error?.message);
-    return new Response('Error fetching domains', { status: 500 });
+    throw new Error('Error fetching domains');
   }
 
   // Call the domain-updater function for each (user_id, domain_name) pair
@@ -65,14 +67,18 @@ async function processAllDomains(req: any) {
   const processedCount = domains.length;
   const endTime = performance.now();
   const duration = ((endTime - startTime) / 1000).toFixed(1);
-  return new Response(`✅ ${processedCount} domains processed successfully in ${duration} seconds`, { status: 200 });
+  return `✅ ${processedCount} domains processed successfully in ${duration} seconds`;
 }
 
 // Supabase serverless function handler
 serve(async (req) => {
+  await monitor.start();
   try {
-    return await processAllDomains(req);
+    const result = await processAllDomains(req);
+    await monitor.success(result);
+    return new Response(result, { status: 200 });
   } catch (error) {
+    await monitor.fail(error);
     console.error('Unexpected error:', (error as Error).message);
     return new Response('Internal Server Error', { status: 500 });
   }

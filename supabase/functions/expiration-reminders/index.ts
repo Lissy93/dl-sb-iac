@@ -1,10 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
+import { Monitor } from '../shared/monitor.ts';
 
 const REMINDER_DAYS = [90, 30, 7, 2];
 
+const monitor = new Monitor('expiration-reminders');
+
 serve(async (req) => {
+  monitor.start();
+
   const supabase = getSupabaseClient(req);
+  let reminderCount = 0;
 
   for (const days of REMINDER_DAYS) {
     const dateStr = getFutureDate(days);
@@ -35,11 +41,14 @@ serve(async (req) => {
         read: false,
       });
 
+      reminderCount++;
       console.log(`🔔 Reminder created for ${domain_name} (${days}d)`);
     }
   }
 
-  return new Response('Done', { status: 200 });
+  const doneMessage = `Done. ${reminderCount} reminders created.`;
+  monitor.success(doneMessage);
+  return new Response(doneMessage, { status: 200 });
 });
 
 function getFutureDate(days: number): string {
