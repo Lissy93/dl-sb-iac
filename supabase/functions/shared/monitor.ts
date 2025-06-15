@@ -10,6 +10,7 @@ const enabledMonitors = [
   'expiration-invites',
   'expiration-reminders',
   'website-monitor',
+  'cleanup-notifications',
 ];
 
 export interface MonitorOptions {
