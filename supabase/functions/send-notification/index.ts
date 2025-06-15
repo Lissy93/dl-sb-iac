@@ -12,9 +12,7 @@
 // '{"email":{"enabled":true,"address":"dl-test-42@d0h.co"},"pushNotification":{"enabled":true},"webHook":{"enabled":true,"url":"https://example.com","provider":"pushbits","topic":"","token":"xxx","userId":"yyy","accessToken":"","headers":""},"signal":{"enabled":true,"number":"07700000000","apiKey":"xxx"},"telegram":{"enabled":true,"botToken":"xxx","chatId":"yyy"},"slack":{"enabled":true,"webhookUrl":"https://example.com/zzz"},"matrix":{"enabled":true,"homeserverUrl":"https://example.com/yyy","accessToken":"xxx"}}'
 
 
-// Import Edge Runtime and required libraries for Supabase
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
+import { serve } from '../shared/serveWithCors.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
 import { Logger } from '../shared/logger.ts';
 import { Monitor } from '../shared/monitor.ts';
@@ -32,7 +30,7 @@ const logger = new Logger('send-notification', {
 const monitor = new Monitor('send-notification');
 
 // Function entry point
-Deno.serve(async (req) => {
+serve(async (req) => {
 
   await monitor.start();
   const supabase = getSupabaseClient(req);

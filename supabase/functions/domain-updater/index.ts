@@ -5,14 +5,10 @@
  * updating the database and triggering notifications if necessary.
  */
 
-import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
+import { serve } from '../shared/serveWithCors.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
 
-
-// Keys
-const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
-const DB_KEY = Deno.env.get('DB_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-
+// Endpoints
 const AS93_DOMAIN_INFO_URL = Deno.env.get('AS93_DOMAIN_INFO_URL') ?? '';
 const AS93_DOMAIN_INFO_KEY = Deno.env.get('AS93_DOMAIN_INFO_KEY') ?? '';
 
@@ -22,6 +18,11 @@ let supabase: ReturnType<typeof getSupabaseClient>;
 
 // Fetch domain data from the DigitalOcean serverless endpoint
 async function fetchDomainData(domain: string) {
+
+  if (!AS93_DOMAIN_INFO_URL || !AS93_DOMAIN_INFO_KEY) {
+    throw new Error('Domain info keys are not configured');
+  }
+
   try {
     const response = await fetch(AS93_DOMAIN_INFO_URL, {
       method: 'POST',
@@ -343,14 +344,6 @@ serve(async (req) => {
   // Check we have a non-empty domain and user_id
   if (!domain || !user_id) {
     return new Response(JSON.stringify({ message: '❌ Domain could not be updated', error: 'Missing params, domain and/or user_id' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-  
-  // Ensure we have the required env vars for the DB
-  if (!DB_URL || !DB_KEY) {
-    return new Response(JSON.stringify({ message: `❌ ${domain} could not be updated`, error: 'Missing DB URL and/or KEY' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

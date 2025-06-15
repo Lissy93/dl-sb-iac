@@ -1,27 +1,18 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from '../shared/serveWithCors.ts';
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') || '';
-const SUPABASE_URL = Deno.env.get('DB_URL') || '';
-const SUPABASE_KEY = Deno.env.get('DB_KEY') || '';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const responseHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400',
-  'Content-Type': 'application/json',
-};
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: responseHeaders, status: 204 });
-  }
+
+  const supabase = getSupabaseClient(req);
 
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Only POST allowed' }, 405);
+  }
+
+  if (!STRIPE_SECRET_KEY) {
+    return jsonResponse({ error: 'Stripe keys are not configured' }, 500);
   }
 
   try {
@@ -92,6 +83,5 @@ serve(async (req: Request) => {
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: responseHeaders,
   });
 }

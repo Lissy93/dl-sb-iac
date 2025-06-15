@@ -1,25 +1,14 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@11.15.0?target=deno';
+import { serve } from '../shared/serveWithCors.ts';
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
 
 // Load environment variables
 const DB_URL = Deno.env.get('DB_URL') ?? '';
-const DB_KEY = Deno.env.get('DB_KEY') ?? '';
 const SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
 const NOTIFICATION_URL = Deno.env.get('WORKER_SEND_NOTIFICATION_URL') ?? `${DB_URL}/functions/v1/send-notification`;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
 // Ensure required environment variables are set
-if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
 if (!STRIPE_SECRET_KEY) console.warn('⚠️ Missing STRIPE_SECRET_KEY. Stripe billing checks will be skipped.');
-
-// Initialize Supabase client (service role for RLS bypass)
-const supabase = createClient(DB_URL, DB_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-});
-
-// Initialize Stripe client (if key is present)
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20.acacia' }) : null;
 
 const STRIPE_PLAN_MAPPING: Record<string, string> = {
   'dl_hobby_monthly': 'hobby',
@@ -32,7 +21,7 @@ const STRIPE_PLAN_MAPPING: Record<string, string> = {
  * Fetches a user from Supabase Auth.
  * Fails fast if the user is not found.
  */
-async function getUser(userId: string): Promise<any | null> {
+async function getUser(userId: string, supabase: ReturnType<typeof getSupabaseClient>): Promise<any | null> {
   try {
     const { data, error } = await supabase.auth.admin.getUserById(userId);
     if (error || !data?.user) {
@@ -121,9 +110,9 @@ async function getActiveStripePlan(customerId: string): Promise<string | null> {
  * Determines the correct billing plan for a user.
  * Prioritizes Stripe over GitHub sponsorships.
  */
-async function determineBillingPlan(userId: string, stripeCustomerId: string | null): Promise<string> {
+async function determineBillingPlan(userId: string, stripeCustomerId: string | null, supabase: ReturnType<typeof getSupabaseClient>): Promise<string> {
   console.info('🔍 Determining appropriate billing plan for user')
-  const user = await getUser(userId);
+  const user = await getUser(userId, supabase);
   if (!user) {
     console.error(`❌ Cannot determine billing plan. User ${userId} does not exist.`);
     return 'free';
@@ -148,7 +137,7 @@ async function determineBillingPlan(userId: string, stripeCustomerId: string | n
  * @param userId 
  * @returns 
  */
-async function createGetStripeCustomer(userId: string): Promise<string | null> {
+async function createGetStripeCustomer(userId: string, supabase: ReturnType<typeof getSupabaseClient>): Promise<string | null> {
   if (!STRIPE_SECRET_KEY) {
     console.warn('⚠️ Stripe not configured.');
     return null;
@@ -234,7 +223,7 @@ async function createGetStripeCustomer(userId: string): Promise<string | null> {
 /**
  * Ensures the user has a billing entry with the correct plan.
  */
-async function setupUserBilling(userId: string) {
+async function setupUserBilling(userId: string, supabase: ReturnType<typeof getSupabaseClient>) {
   console.log(`🔍 Checking billing for user ${userId}`);
 
   try {
@@ -250,10 +239,10 @@ async function setupUserBilling(userId: string) {
     console.info(`ℹ️ User ${userId} current plan: ${currentPlan}`);
 
     // Step 3: Get Stripe customer ID (may create if missing)
-    const stripeCustomerId = await createGetStripeCustomer(userId);
+    const stripeCustomerId = await createGetStripeCustomer(userId, supabase);
 
     // Step 2: Determine correct plan
-    const newPlan = await determineBillingPlan(userId, stripeCustomerId);
+    const newPlan = await determineBillingPlan(userId, stripeCustomerId, supabase);
     if (!newPlan) {
       console.error(`❌ Could not determine billing plan for user ${userId}`);
       return;
@@ -310,6 +299,7 @@ async function setupUserBilling(userId: string) {
  * Supabase Edge Function: Handles user signup events and manual re-checks.
  */
 serve(async (req) => {
+  const supabase = getSupabaseClient(req);
   try {
     // Get the payload body, extract userId, and kick of the checks.
     const body = await req.json();
@@ -319,7 +309,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
     }
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 5000));
-    await Promise.race([setupUserBilling(userId), timeout]);
+    await Promise.race([setupUserBilling(userId, supabase), timeout]);
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
     console.error('❌ Unexpected error:', err);

@@ -1,23 +1,8 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { serve } from '../shared/serveWithCors.ts';
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
 const STRIPE_BASE = 'https://api.stripe.com/v1';
-const DB_URL = Deno.env.get('DB_URL') ?? '';
-const DB_KEY = Deno.env.get('DB_KEY') ?? '';
-
-
-// Ensure required environment variables are set
-if (!DB_URL || !DB_KEY) throw new Error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
-if (!STRIPE_SECRET_KEY) console.warn('⚠️ Missing STRIPE_SECRET_KEY. Stripe billing checks will be skipped.');
-
-// Initialize Supabase client (service role for RLS bypass)
-const supabase = createClient(DB_URL, DB_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-});
-
-
-if (!STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY');
 
 const headers = {
   Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
@@ -25,18 +10,13 @@ const headers = {
 
 serve(async (req) => {
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400',
-      },
-    });
+  // Initialize Supabase client (service role for RLS bypass)
+  const supabase = getSupabaseClient(req);
+
+  if (!STRIPE_SECRET_KEY) {
+    return jsonResponse({ error: 'Stripe integration not configured' }, 500);
   }
-  
+
   try {
     if (req.method !== 'POST') {
       return jsonResponse({ error: 'Only POST allowed' }, 405);
@@ -168,11 +148,5 @@ function toISO(timestamp?: number): string | null {
 
 // JSON response helper
 function jsonResponse(data: any, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
+  return new Response(JSON.stringify(data), { status });
 }

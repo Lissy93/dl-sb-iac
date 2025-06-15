@@ -1,6 +1,6 @@
 // File: ./supabase/functions/website-monitor/index.ts
 
-import { serve } from 'https://deno.land/std@0.140.0/http/server.ts';
+import { serve } from '../shared/serveWithCors.ts';
 import { performance } from 'https://deno.land/std@0.140.0/node/perf_hooks.ts';
 
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
@@ -23,6 +23,10 @@ interface HealthCheckResult {
   dnsTimeMs: number | null;
   sslTimeMs: number | null;
 }
+
+const responseHeaders = {
+  headers: { 'Content-Type': 'application/json' },
+};
 
 // Perform DNS, HTTPS, and latency checks with timeout
 async function checkDomainHealth(domain: string): Promise<Omit<HealthCheckResult, 'id'>> {
@@ -56,12 +60,12 @@ async function checkDomainHealth(domain: string): Promise<Omit<HealthCheckResult
       dnsTimeMs,
       sslTimeMs,
     };
-  } catch (error) {
+  } catch (error: Error | any) {
     clearTimeout(timeout);
     if (error instanceof Error && error.name === 'AbortError') {
       logger.warn(`Timeout reached while checking domain: ${domain}`);
     } else {
-      logger.error(`Unexpected error checking domain ${domain}: ${error.message}`);
+      logger.error(`Unexpected error checking domain ${domain}: ${error?.message}`);
     }
     return {
       isUp: false,
@@ -76,7 +80,7 @@ async function checkDomainHealth(domain: string): Promise<Omit<HealthCheckResult
 // Main handler
 serve(async (req: Request) => {
   logger.info('🔁 Website monitor function started');
-  monitor.start();
+  monitor.start(req);
   const supabase = getSupabaseClient(req);
 
   try {
@@ -88,13 +92,19 @@ serve(async (req: Request) => {
 
     if (billingError) {
       logger.error(`Error fetching billing users: ${billingError.message}`);
-      return new Response(JSON.stringify({ error: 'Billing query failed' }), { status: 500 });
+      return new Response(
+        JSON.stringify({ error: 'Billing query failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     const userIds = (billingData ?? []).map((row: Billing) => row.user_id);
     if (userIds.length === 0) {
       logger.info('No pro users found');
-      return new Response(JSON.stringify({ message: 'No pro users to monitor' }), { status: 200 });
+      return new Response(
+        JSON.stringify({ message: 'User(s) not on pro plan' }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     // Step 2: Fetch domains owned by pro users
@@ -105,12 +115,18 @@ serve(async (req: Request) => {
 
     if (domainError) {
       logger.error(`Error fetching domains: ${domainError.message}`);
-      return new Response(JSON.stringify({ error: 'Domain query failed' }), { status: 500 });
+      return new Response(
+        JSON.stringify({ error: 'Domain query failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     if (!domains || domains.length === 0) {
       logger.info('No domains found for pro users');
-      return new Response(JSON.stringify({ message: 'No domains to monitor' }), { status: 200 });
+      return new Response(
+        JSON.stringify({ message: 'No domains to monitor' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     }
 
     // Step 3: Run checks and collect uptime metrics

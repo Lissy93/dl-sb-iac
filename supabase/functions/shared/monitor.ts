@@ -19,6 +19,7 @@ export interface MonitorOptions {
   glitchtipToken?: string;           // GlitchTip auth token (optional)
   jobName?: string;                  // Optional label for logs
   notifyOnStart?: boolean;           // Whether to ping "start" at beginning
+  cronHeader?: string;               // Header to check for cron runs
 }
 
 export class Monitor {
@@ -27,14 +28,15 @@ export class Monitor {
   private glitchtipToken?: string;
   private jobName?: string;
   private enabled: boolean = false;
+  private cronHeader: string = 'X-Cron-Run';
 
   constructor(jobName: string, opts: MonitorOptions = {}) {
     this.jobName = jobName;
     this.healthcheckUrl = opts.healthcheckUrl || Deno.env.get('HC_URL');
     this.glitchtipUrl = opts.glitchtipUrl || Deno.env.get('GLITCHTIP_URL');
     this.glitchtipToken = opts.glitchtipToken || Deno.env.get('GLITCHTIP_TOKEN');
-
     this.enabled = enabledMonitors.includes(jobName);
+    this.cronHeader = opts.cronHeader || 'X-Cron-Run';
 
     if (opts.notifyOnStart) {
       this.ping('start');
@@ -57,7 +59,14 @@ export class Monitor {
     this.ping('fail');
   }
 
-  public start() {
+  private isCronRun(req?: Request): boolean {
+    return req?.headers.get(this.cronHeader) === 'true';
+  }
+
+  public start(req?: Request) {
+    if (!this.isCronRun(req)) {
+      this.enabled = false;
+    }
     console.info(`🔄 [${this.jobName}] Job started`);
     this.ping('start');
   }

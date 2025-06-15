@@ -1,11 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-
-const DB_URL = Deno.env.get('DB_URL') ?? '';
-const DB_KEY = Deno.env.get('DB_KEY') ?? '';
-const supabase = createClient(DB_URL, DB_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-});
+import { serve } from '../shared/serveWithCors.ts';
+import { getSupabaseClient } from '../shared/supabaseClient.ts';
 
 /** Helper to get env var, or fallback, or throw error. */
 function getEnvVar(name: string, fallback?: string): string {
@@ -51,23 +45,17 @@ const responseHeaders =  {
 
 serve(async (req: Request) => {
 
-  // Early return for preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-      status: 204,
-    });
-  }
+  const supabase = getSupabaseClient(req);
   
   // 1) Get environment vars (or fallback)
   try {
     const STRIPE_SECRET_KEY = getEnvVar('STRIPE_SECRET_KEY');
     const STRIPE_ENDPOINT   = getEnvVar('STRIPE_ENDPOINT', 'https://api.stripe.com/v1/checkout/sessions');
     const APP_BASE_URL      = getEnvVar('DL_BASE_URL', 'https://domain-locker.com');
+
+    if (!STRIPE_SECRET_KEY) {
+      return new Response(JSON.stringify({ error: 'Stripe keys are not configured' }), { headers: responseHeaders, status: 500 });
+    }
 
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Only POST allowed' }), { headers: responseHeaders, status: 405 });

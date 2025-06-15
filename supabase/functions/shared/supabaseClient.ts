@@ -1,7 +1,6 @@
 import { createClient, type SupabaseClient, type User } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('DB_URL')!
-const SERVICE_KEY = Deno.env.get('DB_KEY')!
 const ANON_KEY = Deno.env.get('DB_ANON_KEY')!
 
 // const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -14,18 +13,23 @@ const ANON_KEY = Deno.env.get('DB_ANON_KEY')!
  * Otherwise, if a service  role is present, we use that
  */
 export function getSupabaseClient(req: Request): SupabaseClient {
-  if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY) {
+  if (!SUPABASE_URL || !ANON_KEY) {
     throw new Response('Supabase environment variables are misconfigured.', { status: 500 });
   }
   try {
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '');
+
+    if (!jwt) {
+      throw new Response('🚫 Unauthorized, missing bearer token', { status: 401 });
+    }
+
     return createClient(
       SUPABASE_URL,
       ANON_KEY,
       {
         global: {
           headers: {
-            ...(jwt ? { Authorization: `Bearer ${jwt}` } : { Authorization: `Bearer ${SERVICE_KEY}` }),
+            ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
           },
         },
         auth: {
@@ -37,7 +41,7 @@ export function getSupabaseClient(req: Request): SupabaseClient {
     );
   } catch (err) {
     console.error('Error creating Supabase client:', err);
-    throw new Response('🚫 Unauthorized', { status: 401 });
+    throw new Response('🚫 Unauthorized, invalid bearer token', { status: 401 });
   }
 }
 

@@ -5,7 +5,7 @@
  * Logs responses, and returns a summary response
  */
 
-import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
+import { serve } from '../shared/serveWithCors.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
 import { Monitor } from '../shared/monitor.ts';
 
@@ -72,7 +72,7 @@ async function processAllDomains(req: any) {
 
 // Supabase serverless function handler
 serve(async (req) => {
-  await monitor.start();
+  await monitor.start(req);
   try {
     const result = await processAllDomains(req);
     await monitor.success(result);

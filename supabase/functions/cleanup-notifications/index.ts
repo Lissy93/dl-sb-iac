@@ -4,7 +4,7 @@
  * Intended to be run as a daily cron
  */
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from '../shared/serveWithCors.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
 import { Logger } from '../shared/logger.ts';
 import { Monitor } from '../shared/monitor.ts';
@@ -18,7 +18,7 @@ const DB_URL = Deno.env.get('DB_URL');
 const DB_KEY = Deno.env.get('DB_KEY');
 
 serve(async (req) => {
-  await monitor.start();
+  await monitor.start(req);
   const supabase = getSupabaseClient(req);
 
   if (!DB_URL || !DB_KEY) {

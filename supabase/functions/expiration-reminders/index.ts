@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from '../shared/serveWithCors.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
 import { Monitor } from '../shared/monitor.ts';
 
@@ -7,7 +7,7 @@ const REMINDER_DAYS = [90, 30, 7, 2];
 const monitor = new Monitor('expiration-reminders');
 
 serve(async (req) => {
-  monitor.start();
+  monitor.start(req);
 
   const supabase = getSupabaseClient(req);
   let reminderCount = 0;
