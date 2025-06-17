@@ -1,5 +1,7 @@
 import { serve } from '../shared/serveWithCors.ts';
 import { getSupabaseClient } from '../shared/supabaseClient.ts';
+import { Monitor } from '../shared/monitor.ts';
+
 
 // Load environment variables
 const DB_URL = Deno.env.get('DB_URL') ?? '';
@@ -16,6 +18,8 @@ const STRIPE_PLAN_MAPPING: Record<string, string> = {
   'dl_pro_monthly': 'pro',
   'dl_pro_annual': 'pro',
 };
+
+const monitor = new Monitor('user-billing-check');
 
 /**
  * Fetches a user from Supabase Auth.
@@ -299,6 +303,7 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
  * Supabase Edge Function: Handles user signup events and manual re-checks.
  */
 serve(async (req) => {
+  monitor.start(req);
   const supabase = getSupabaseClient(req);
   try {
     // Get the payload body, extract userId, and kick of the checks.
@@ -306,13 +311,16 @@ serve(async (req) => {
     const userId = body.user?.id || body.userId || body.user_id;
     if (!userId) {
       console.error('❌ Invalid webhook payload:', body);
+      monitor.fail('No user ID');
       return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
     }
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 5000));
     await Promise.race([setupUserBilling(userId, supabase), timeout]);
+    monitor.success('User billing check complete');
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
     console.error('❌ Unexpected error:', err);
+    monitor.fail(err);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
   }
 });

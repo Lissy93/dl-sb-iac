@@ -91,7 +91,9 @@ serve(async (req: Request) => {
       .eq('current_plan', 'pro');
 
     if (billingError) {
-      logger.error(`Error fetching billing users: ${billingError.message}`);
+      const message = `Error fetching billing users: ${billingError.message}`;
+      logger.error(message);
+      monitor.fail(`Billing query failed: ${billingError.message}`);
       return new Response(
         JSON.stringify({ error: 'Billing query failed' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -100,6 +102,7 @@ serve(async (req: Request) => {
 
     const userIds = (billingData ?? []).map((row: Billing) => row.user_id);
     if (userIds.length === 0) {
+      monitor.fail('No pro users found');
       logger.info('No pro users found');
       return new Response(
         JSON.stringify({ message: 'User(s) not on pro plan' }),
@@ -115,6 +118,7 @@ serve(async (req: Request) => {
 
     if (domainError) {
       logger.error(`Error fetching domains: ${domainError.message}`);
+      monitor.fail(`Domain query failed: ${domainError.message}`);
       return new Response(
         JSON.stringify({ error: 'Domain query failed' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -123,6 +127,7 @@ serve(async (req: Request) => {
 
     if (!domains || domains.length === 0) {
       logger.info('No domains found for pro users');
+      monitor.success('No domains to monitor');
       return new Response(
         JSON.stringify({ message: 'No domains to monitor' }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -151,6 +156,7 @@ serve(async (req: Request) => {
 
     if (insertError) {
       logger.error(`Error inserting uptime data: ${insertError.message}`);
+      monitor.fail(`Insert uptime failed: ${insertError.message}`);
       return new Response(JSON.stringify({ error: 'Failed to insert uptime' }), { status: 500 });
     }
 
