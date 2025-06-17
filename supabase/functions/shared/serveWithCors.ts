@@ -2,9 +2,7 @@
 import { serve as stdServe } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { Logger } from './logger.ts';
 
-const logger = new Logger('http-serve', {
-  centralLogUrl: Deno.env.get('DL_LOGGING_ENDPOINT'),
-});
+const logger = new Logger('http-serve');
 
 const DEFAULT_CORS = {
   'Access-Control-Allow-Origin': Deno.env.get('APP_ORIGIN') || '*',

@@ -6,27 +6,16 @@ export class Logger {
   private centralLogUrl?: string;
   private logs: { level: LogLevel; message: string; timestamp: string }[] = [];
 
-  constructor(prefix = '', opts: { centralLogUrl?: string } = {}) {
+  constructor(prefix = '') {
     this.enabled = Deno.env.get('DL_LOGGING_ENABLED') === 'true';
     this.prefix = prefix;
-    this.centralLogUrl = opts.centralLogUrl;
+    this.centralLogUrl = Deno.env.get('LOGFLARE_ENDPOINT_URL') ?? Deno.env.get('DL_CENTRAL_LOG_URL');
   }
 
-  public info(msg: string) {
-    this.log('info', msg, '🟢');
-  }
-
-  public warn(msg: string) {
-    this.log('warn', msg, '🟡');
-  }
-
-  public error(msg: string) {
-    this.log('error', msg, '🔴');
-  }
-
-  public debug(msg: string) {
-    this.log('debug', msg, '🔍');
-  }
+  public info(msg: string) { this.log('info', msg, '🟢'); }
+  public warn(msg: string) { this.log('warn', msg, '🟡'); }
+  public error(msg: string) { this.log('error', msg, '🔴'); }
+  public debug(msg: string) { this.log('debug', msg, '🔍'); }
 
   private log(level: LogLevel, msg: string, icon: string) {
     const timestamp = new Date().toISOString();
@@ -37,12 +26,12 @@ export class Logger {
     if (!this.enabled) return;
 
     try {
-      if (level === 'error') console.error(formatted);
-      else if (level === 'warn') console.warn(formatted);
-      else console.log(formatted);
-    } catch (_) {
-      // Silent fail
-    }
+      level === 'error'
+        ? console.error(formatted)
+        : level === 'warn'
+        ? console.warn(formatted)
+        : console.log(formatted);
+    } catch {}
   }
 
   public getLogs() {
@@ -53,17 +42,19 @@ export class Logger {
     if (!this.centralLogUrl || this.logs.length === 0) return;
 
     try {
+      // Asynchronously (as to not block), send logs to a place far, far away
+      const payload = {
+        prefix: this.prefix,
+        timestamp: new Date().toISOString(),
+        logs: this.logs,
+      };
       await fetch(this.centralLogUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prefix: this.prefix,
-          logs: this.logs,
-          time: new Date().toISOString(),
-        }),
-      });
+        body: JSON.stringify(payload),
+      }).catch(err => this.warn('Logflare send error: ' + err.message));
     } catch (_) {
-      this.warn('Failed to send logs to central endpoint');
+      this.warn('Error in flushToRemote');
     }
   }
 }
