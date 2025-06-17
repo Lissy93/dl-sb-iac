@@ -24,9 +24,7 @@ import { sendSlackNotification } from "./senders/slack.ts";
 import { sendSmsNotification } from "./senders/sms.ts";
 import { sendWhatsAppNotification } from "./senders/whatsapp.ts";
 
-const logger = new Logger('send-notification', {
-  centralLogUrl: Deno.env.get('DL_LOGGING_ENDPOINT'),
-});
+const logger = new Logger('send-notification');
 const monitor = new Monitor('send-notification');
 
 // Function entry point
