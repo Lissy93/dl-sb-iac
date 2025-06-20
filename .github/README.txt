@@ -14,16 +14,19 @@ DIRECTORY STRUCTURE
 ================================================================================
 domain-locker-edge/
 ├─ supabase/
-│  ├─ functions/    # Deno Edge functions
-│  ├─ migrations/   # Database schema
-│  ├─ templates/    # Mailer templates
-│  ╰─ config.toml   # Supabase configuration
-├─ .github/         # Repo admin, and GH Actions
-│  ├─ workflows/    # CI/CD files for deployment
-│  ╰─ README.txt    # You're looking at it ;)
-├─ Makefile         # Project commands
-├─ deno.json        # Deno project config
-╰─ .gitignore       # Stuff to not commit
+│  ├─ functions/      # Deno Edge functions
+│  │  ├─ [function]/  # Directory for each function
+│  │  │  ╰─ index.ts  # Entry point for the function
+│  │  ╰─ shared/      # Utilities for edge functions
+│  ├─ migrations/     # Database schema
+│  ├─ templates/      # Mailer templates
+│  ╰─ config.toml     # Supabase configuration
+├─ .github/           # Repo admin, and GH Actions
+│  ├─ workflows/      # CI/CD files for deployment
+│  ╰─ README.txt      # You're looking at it ;)
+├─ Makefile           # Project commands
+├─ deno.json          # Deno project config
+╰─ .gitignore         # Stuff to not commit
 
 ================================================================================
 DEVELOPING
@@ -67,6 +70,16 @@ ENVIRONMENT VARIABLES
 Supabase:
   DB_URL - The URL to your Supabase instance and project
   DB_KEY - The anon key to your new Supabase project
+
+Config:
+  DL_LOGGING_ENABLED - Enable or disable logging
+  APP_ORIGIN - The origin URL for client-app (for CORS)
+
+Monitoring:
+  HC_URL - The URL to the Healthcheck service
+  GLITCHTIP_URL - URL to your GlitchTip/Sentry instance
+  GLITCHTIP_TOKEN - DSN token for GlitchTip/Sentry
+  LOGFLARE_ENDPOINT_URL - The Logflare endpoint URL
 
 Authentication
   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID   - Google OAuth Client ID
@@ -116,60 +129,98 @@ supabase secrets set --env-file supabase/functions/.env
 FUNCTIONS
 ================================================================================
 Stripe and Billing:
-- cancel-subscription Cancels a user's subscription
-- checkout-session    Creates a new checkout session for a subscription
-- stripe-webhook      Handles incoming events triggered from Stripe
-- new-user-billing    Adds a billing record for new users + checks if sponsor
+- cancel-subscription   Cancels a user's subscription
+- checkout-session      Creates a new checkout session for a subscription
+- stripe-webhook        Handles incoming events triggered from Stripe
+- new-user-billing      Create/updates Stripe customer, and applies user plan
+- stripe-details        Fetches Stripe billing and customer details for a user
 
 User Management:
-- delete-account      Deletes a user account and all associated data
-- export-data         Exports all (selected) data for a user in a given format
+- delete-account        Deletes a user account and all associated data
+- export-data           Exports all (selected) data for a user in a given format
 
 Domain Management:
-- trigger-updates     Selects all domains for users, and triggers domain-updater
-- domain-updater      Updates domains with latest info, triggers notifications
-- send-notification   Sends a notification to user id with message
-- website-monitor     Gets response info for each (pro) domain, updates db
+- trigger-updates       Selects domains for users, and triggers domain-updater
+- domain-updater        Updates domains with latest info, triggers notifications
+- send-notification     Sends a notification to user id with message
+- website-monitor       Gets response info for each (pro) domain, updates db
+- expiration-invites    Creates a calendar invite 90 days before domain expiry
+- expiration-reminders  Triggers reminders for upcoming domain expirations
+
+Maintenance:
+- cleanup-monitor-data  Averages historic data from website monitoring
+- cleanup-notifications Ensures notifications have been sent, removes old ones
+- health                Checks system health, returns service statuses
 
 Info Routes:
-- domain-info         Fetches all info for any given domain name
-- domain-subs         Fetches all subdomains for any given domain
+- domain-info           Fetches all info for any given domain name
+- domain-subs           Fetches all subdomains for any given domain
+
+
+================================================================================
+UTILITIES
+================================================================================
+There's some shared utils that all/most the functions use, these are:
+
+- logger
+  - For consistent logging, with different levels (info, warn, error)
+  - Can integrate with external logging services for better monitoring
+  - Can report error logs to GlitchTip/Sentry or other error tracking
+- monitor
+  - Monitors function duration and status
+  - If `X-Cron-Run` header is set, will send to Healthcheck for cron monitoring
+  - Can integrate with external monitoring services for better insights
+- serveWithCors
+  - Wraps Deno HTTP server, but with shared headers and config set
+  - Mostly used for handling CORS and common response headers
+  - Set `APP_ORIGIN` to allow specific origins to make requests
+- supabaseClient.ts
+  - Provides a shared Supabase client for functions
+  - Handles authentication and authorization for requests
+  - Permissions and access is determined by the JWT bearer token passed
+  - So users can call endpoints with RLS applied, to restrict access
+
 
 ================================================================================
 CRON JOBS
 ================================================================================
-We use crons to trigger some functions at specific times via pg_cron in Posthres
-This is used for keeping the domain info up-to-date, and for monitoring websites
+Some functions are triggered at specific times or intervals as scheduled crons
+We do this directly from Postgres's pg_cron using the `cron.schedule` function
+This is mainly used for keeping data up-to-date, triggering alerts and cleaning
 
-JOB 1 - Trigger domain updates at 04:00 every day
-  - Schedule: 0 4 * * *
-  - Nodename: localhost
-  - Nodeport: 5432
-  - Database: postgres
-  - Username: postgres
-  - Job Name: run_domain_update_job
-  - Endpoint: https://[supabase-instance]/functions/v1/trigger-updates
+We have the following crons setup with `cron.schedule` function.
+- cleanup-monitor-data  (runs daily, e.g. 0 2 * * *)
+- new-user-billing      (runs daily, e.g. 0 3 * * *)
+- run_domain_update_job (runs daily, e.g. 0 4 * * *)
+- cleanup-notifications (runs daily, e.g. 0 5 * * *)
+- expiration-invites    (runs daily, e.g. 0 6 * * *)
+- expiration-reminders  (runs daily, e.g. 0 7 * * *)
+- monitor-uptimes       (runs hourly, e.g. 0 * * * *)
 
-JOB 2 - Trigger website monitor every hour
-  - Schedule: 0 * * * *
-  - Nodename: localhost
-  - Nodeport: 5432
-  - Database: postgres
-  - Username: postgres
-  - Job Name: run_website_monitor_job
-  - Endpoint: https://[supabase-instance]/functions/v1/website-monitor
-
-Example SQL for cron job:
-  SELECT
-    net.http_post(
-      url := '[url to endpoint]',
+Example SQL to create a cron:
+select cron.schedule(
+  'cleanup-notifications',
+  '0 5 * * *',
+  $$
+    SELECT net.http_post(
+      url := (
+        SELECT decrypted_secret
+        FROM vault.decrypted_secrets
+        WHERE name = 'project_url'
+      ) || '/functions/v1/cleanup-notifications',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_API_KEY'
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret
+          FROM vault.decrypted_secrets
+          WHERE name = 'service_key'
+        ),
+        'X-Cron-Run', 'true'
       ),
-      body := '{}'::jsonb,
-      timeout_milliseconds := 5000
-    ) AS request_id;
+      body := jsonb_build_object('invoked_at', now())
+    );
+  $$
+);
 
 ================================================================================
 SUPPORT
