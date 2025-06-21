@@ -11,6 +11,8 @@ const enabledMonitors = [
   'expiration-reminders',
   'website-monitor',
   'cleanup-notifications',
+  'user-billing-check',
+  'cleanup-monitor-data',
 ];
 
 export interface MonitorOptions {
