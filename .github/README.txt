@@ -64,6 +64,63 @@ You'll need to configure the following GitHub secrets to authenticate:
   SUPABASE_DB_PASSWORD    - The Postgres password for your Supabase DB
   SUPABASE_ENV_FILE       - Raw text env vars for all else you need (see below)
 
+
+================================================================================
+FUNCTIONS
+================================================================================
+Stripe and Billing:
+- cancel-subscription   Cancels a user's subscription
+- checkout-session      Creates a new checkout session for a subscription
+- stripe-webhook        Handles incoming events triggered from Stripe
+- new-user-billing      Create/updates Stripe customer, and applies user plan
+- stripe-details        Fetches Stripe billing and customer details for a user
+
+User Management:
+- delete-account        Deletes a user account and all associated data
+- export-data           Exports all (selected) data for a user in a given format
+
+Domain Management:
+- trigger-updates       Selects domains for users, and triggers domain-updater
+- domain-updater        Updates domains with latest info, triggers notifications
+- send-notification     Sends a notification to user id with message
+- website-monitor       Gets response info for each (pro) domain, updates db
+- expiration-invites    Creates a calendar invite 90 days before domain expiry
+- expiration-reminders  Triggers reminders for upcoming domain expirations
+
+Maintenance:
+- cleanup-monitor-data  Averages historic data from website monitoring
+- cleanup-notifications Ensures notifications have been sent, removes old ones
+- health                Checks system health, returns service statuses
+
+Info Routes:
+- domain-info           Fetches all info for any given domain name
+- domain-subs           Fetches all subdomains for any given domain
+
+
+================================================================================
+UTILITIES
+================================================================================
+There's some shared utils that all/most the functions use, these are:
+
+- logger
+  - For consistent logging, with different levels (info, warn, error)
+  - Can integrate with external logging services for better monitoring
+  - Can report error logs to GlitchTip/Sentry or other error tracking
+- monitor
+  - Monitors function duration and status
+  - If `X-Cron-Run` header is set, will send to Healthcheck for cron monitoring
+  - Can integrate with external monitoring services for better insights
+- serveWithCors
+  - Wraps Deno HTTP server, but with shared headers and config set
+  - Mostly used for handling CORS and common response headers
+  - Set `APP_ORIGIN` to allow specific origins to make requests
+- supabaseClient
+  - Provides a shared Supabase client for functions
+  - Handles authentication and authorization for requests
+  - Permissions and access is determined by the JWT bearer token passed
+  - So users can call endpoints with RLS applied, to restrict access
+
+
 ================================================================================
 ENVIRONMENT VARIABLES
 ================================================================================
@@ -124,61 +181,6 @@ Telegram
 It's advisable to use a secret store for this. We use Supabase Vault.
 Or, you can pass secrets to Supabase, by running:
 supabase secrets set --env-file supabase/functions/.env
-
-================================================================================
-FUNCTIONS
-================================================================================
-Stripe and Billing:
-- cancel-subscription   Cancels a user's subscription
-- checkout-session      Creates a new checkout session for a subscription
-- stripe-webhook        Handles incoming events triggered from Stripe
-- new-user-billing      Create/updates Stripe customer, and applies user plan
-- stripe-details        Fetches Stripe billing and customer details for a user
-
-User Management:
-- delete-account        Deletes a user account and all associated data
-- export-data           Exports all (selected) data for a user in a given format
-
-Domain Management:
-- trigger-updates       Selects domains for users, and triggers domain-updater
-- domain-updater        Updates domains with latest info, triggers notifications
-- send-notification     Sends a notification to user id with message
-- website-monitor       Gets response info for each (pro) domain, updates db
-- expiration-invites    Creates a calendar invite 90 days before domain expiry
-- expiration-reminders  Triggers reminders for upcoming domain expirations
-
-Maintenance:
-- cleanup-monitor-data  Averages historic data from website monitoring
-- cleanup-notifications Ensures notifications have been sent, removes old ones
-- health                Checks system health, returns service statuses
-
-Info Routes:
-- domain-info           Fetches all info for any given domain name
-- domain-subs           Fetches all subdomains for any given domain
-
-
-================================================================================
-UTILITIES
-================================================================================
-There's some shared utils that all/most the functions use, these are:
-
-- logger
-  - For consistent logging, with different levels (info, warn, error)
-  - Can integrate with external logging services for better monitoring
-  - Can report error logs to GlitchTip/Sentry or other error tracking
-- monitor
-  - Monitors function duration and status
-  - If `X-Cron-Run` header is set, will send to Healthcheck for cron monitoring
-  - Can integrate with external monitoring services for better insights
-- serveWithCors
-  - Wraps Deno HTTP server, but with shared headers and config set
-  - Mostly used for handling CORS and common response headers
-  - Set `APP_ORIGIN` to allow specific origins to make requests
-- supabaseClient.ts
-  - Provides a shared Supabase client for functions
-  - Handles authentication and authorization for requests
-  - Permissions and access is determined by the JWT bearer token passed
-  - So users can call endpoints with RLS applied, to restrict access
 
 
 ================================================================================

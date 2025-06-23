@@ -251,8 +251,6 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
       return;
     }
 
-
-
     // Step 4: Build updated meta object
     const updatedMeta = {
       ...existingMeta,
@@ -261,6 +259,12 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
 
     // Step 5: Insert or update billing record
     const timestamp = new Date().toISOString();
+
+    // Do not downgrade complimentary users
+    if (currentPlan === 'complimentary' && newPlan === 'free') {
+      console.info(`⚖️ User ${userId} has complimentary plan, skipping downgrade`);
+      return;
+    }
 
     const { error: upsertError } = await supabase
       .from('billing')
