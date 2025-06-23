@@ -223,7 +223,6 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
 }
 
 
-
 /**
  * Ensures the user has a billing entry with the correct plan.
  */
@@ -305,22 +304,51 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
 serve(async (req) => {
   monitor.start(req);
   const supabase = getSupabaseClient(req);
+
   try {
-    // Get the payload body, extract userId, and kick of the checks.
     const body = await req.json();
     const userId = body.user?.id || body.userId || body.user_id;
-    if (!userId) {
-      console.error('❌ Invalid webhook payload:', body);
-      monitor.fail('No user ID');
-      return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
+
+    // If userId is provided, run single-user mode
+    if (userId) {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 5000));
+      await Promise.race([setupUserBilling(userId, supabase), timeout]);
+      await monitor.success(`Billing check complete for user ${userId}`);
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 5000));
-    await Promise.race([setupUserBilling(userId, supabase), timeout]);
-    monitor.success('User billing check complete');
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
-  } catch (err) {
-    console.error('❌ Unexpected error:', err);
-    monitor.fail(err);
+
+    // Otherwise, run for all users
+    const { data: usersPage, error } = await supabase.auth.admin.listUsers();
+    const users = usersPage?.users ?? [];
+
+    if (error || !users || users.length === 0) {
+      throw new Error('Failed to fetch user list or no users found');
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const user of users) {
+      const id = user.id;
+      try {
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 2000));
+        await Promise.race([setupUserBilling(id, supabase), timeout]);
+        successCount++;
+      } catch (err: any) {
+        console.warn(`⚠️ Skipping user ${id} due to timeout or error:`, err.message || err);
+        failureCount++;
+      }
+    }
+
+    const summary = `Billing setup complete for ${successCount} user(s), ${failureCount} failed.`;
+    await monitor.success(summary);
+    return new Response(JSON.stringify({ success: true, processed: successCount, failed: failureCount }), {
+      status: 200,
+    });
+
+  } catch (err: any) {
+    console.error('❌ Unexpected error:', err.message || err);
+    await monitor.fail(err);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
   }
 });
