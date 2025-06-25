@@ -46,7 +46,9 @@ jobs:
         run: supabase db init || echo "Already initialized"
 
       - name: 🔧 Push Config to Supabase
-        run: supabase config push --file "$CONFIG_FILE"
+        run: |
+            cp "$CONFIG_FILE" supabase/config.toml
+            supabase config push
 
       - name: 🗃️ Apply DB Migrations
         run: yes | supabase db push
