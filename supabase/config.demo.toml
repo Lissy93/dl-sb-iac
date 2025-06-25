@@ -51,7 +51,7 @@ enable_anonymous_sign_ins = false
 enable_manual_linking = false
 
 [auth.email]
-enable_signup = false
+enable_signup = true
 secure_password_change = true
 max_frequency = "60s"
 
