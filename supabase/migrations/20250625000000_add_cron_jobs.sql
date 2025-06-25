@@ -1,7 +1,6 @@
 -- Replace cron jobs by name before scheduling them
 
 -- 1. expiration-invites
-DELETE FROM cron.job WHERE jobname = 'expiration-invites';
 SELECT cron.schedule(
   'expiration-invites', '0 6 * * *',
   $$
@@ -18,7 +17,6 @@ SELECT cron.schedule(
 );
 
 -- 2. run_website_monitor_job
-DELETE FROM cron.job WHERE jobname = 'run_website_monitor_job';
 SELECT cron.schedule(
   'run_website_monitor_job', '0 * * * *',
   $$
@@ -36,7 +34,6 @@ SELECT cron.schedule(
 );
 
 -- 3. run_domain_update_job
-DELETE FROM cron.job WHERE jobname = 'run_domain_update_job';
 SELECT cron.schedule(
   'run_domain_update_job', '0 4 * * *',
   $$
@@ -53,7 +50,6 @@ SELECT cron.schedule(
 );
 
 -- 4. cleanup-notifications
-DELETE FROM cron.job WHERE jobname = 'cleanup-notifications';
 SELECT cron.schedule(
   'cleanup-notifications', '0 5 * * *',
   $$
@@ -70,7 +66,6 @@ SELECT cron.schedule(
 );
 
 -- 5. new-user-billing
-DELETE FROM cron.job WHERE jobname = 'new-user-billing';
 SELECT cron.schedule(
   'new-user-billing', '0 3 * * *',
   $$
@@ -87,7 +82,6 @@ SELECT cron.schedule(
 );
 
 -- 6. expiration-reminders
-DELETE FROM cron.job WHERE jobname = 'expiration-reminders';
 SELECT cron.schedule(
   'expiration-reminders', '0 7 * * *',
   $$
@@ -104,7 +98,6 @@ SELECT cron.schedule(
 );
 
 -- 7. cleanup-monitor-data
-DELETE FROM cron.job WHERE jobname = 'cleanup-monitor-data';
 SELECT cron.schedule(
   'cleanup-monitor-data', '0 2 * * *',
   $$
