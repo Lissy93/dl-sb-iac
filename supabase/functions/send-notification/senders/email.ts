@@ -14,7 +14,9 @@ async function loadEmailTemplate(): Promise<string> {
     }
     return await response.text();
   } catch (error) {
-    throw new Error("Failed to load email template from URL. Ensure the URL is correct and accessible.");
+    throw new Error(
+      "Failed to load email template from URL. Ensure the URL is correct and accessible.",
+    );
   }
 }
 
@@ -24,14 +26,21 @@ async function loadEmailTemplate(): Promise<string> {
  * @param {EmailConfig} config - User's email configuration
  * @param {string} message - The message content to send
  */
-export async function sendEmailNotification(config: EmailConfig, message: string): Promise<void> {
+export async function sendEmailNotification(
+  config: EmailConfig,
+  message: string,
+): Promise<void> {
   try {
     if (!RESEND_API_KEY) {
-      throw new Error("Resend API key is missing. Set RESEND_API_KEY in environment variables.");
+      throw new Error(
+        "Resend API key is missing. Set RESEND_API_KEY in environment variables.",
+      );
     }
 
     if (!RESEND_SENDER) {
-      throw new Error("Resend sender email is missing. Set RESEND_SENDER in environment variables.");
+      throw new Error(
+        "Resend sender email is missing. Set RESEND_SENDER in environment variables.",
+      );
     }
 
     if (!config.address) {
@@ -60,7 +69,7 @@ export async function sendEmailNotification(config: EmailConfig, message: string
     // Handle non-JSON responses
     const responseText = await response.text();
     let responseData;
-    
+
     try {
       responseData = JSON.parse(responseText);
     } catch (jsonError) {
@@ -68,7 +77,9 @@ export async function sendEmailNotification(config: EmailConfig, message: string
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to send email: ${responseData.message || response.statusText}`);
+      throw new Error(
+        `Failed to send email: ${responseData.message || response.statusText}`,
+      );
     }
 
     console.log(`✅ Email sent successfully to ${config.address}`);

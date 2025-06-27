@@ -7,7 +7,9 @@ const dunno = "Unknown";
  * Verifies that the request’s “Authorization” header matches the token
  * specified in the AUTH_TOKEN environment variable.
  */
-async function verifyAuth(req: Request): Promise<{ success: boolean; error?: string }> {
+async function verifyAuth(
+  req: Request,
+): Promise<{ success: boolean; error?: string }> {
   const authHeader = req.headers.get("authorization");
   const token = Deno.env.get("AUTH_TOKEN") || "";
   return authHeader === `Bearer ${token}`
@@ -48,10 +50,9 @@ async function safeExecute<T>(
  */
 async function getWhoisData(domain: string): Promise<any | null> {
   const lower = domain.toLowerCase();
-  const url =
-    lower.endsWith(".com")
-      ? `https://rdap.verisign.com/com/v1/domain/${encodeURIComponent(domain)}`
-      : `https://rdap.org/domain/${encodeURIComponent(domain)}`;
+  const url = lower.endsWith(".com")
+    ? `https://rdap.verisign.com/com/v1/domain/${encodeURIComponent(domain)}`
+    : `https://rdap.org/domain/${encodeURIComponent(domain)}`;
   const res = await fetch(url);
   if (!res.ok) {
     console.error("RDAP fetch failed", res.status);
@@ -79,11 +80,10 @@ function rdapToWhois(rdap: any): any {
   const domainName = rdap.ldhName || dunno;
   const statusArray = Array.isArray(rdap.status) ? rdap.status : [];
   // If the only status is "client transfer prohibited", return an empty array.
-  const domainStatus =
-    statusArray.length === 1 &&
-    statusArray[0].toLowerCase() === "client transfer prohibited"
-      ? []
-      : statusArray;
+  const domainStatus = statusArray.length === 1 &&
+      statusArray[0].toLowerCase() === "client transfer prohibited"
+    ? []
+    : statusArray;
   let creationDate = "";
   let updatedDate = "";
   let expiryDate = "";
@@ -93,7 +93,9 @@ function rdapToWhois(rdap: any): any {
         creationDate = ev.eventDate;
       } else if (ev.eventAction === "expiration") {
         expiryDate = ev.eventDate;
-      } else if (ev.eventAction === "last changed" || ev.eventAction === "last update") {
+      } else if (
+        ev.eventAction === "last changed" || ev.eventAction === "last update"
+      ) {
         updatedDate = ev.eventDate;
       }
     }
@@ -104,7 +106,9 @@ function rdapToWhois(rdap: any): any {
   let registrarUrl = dunno;
   let registryDomainId = dunno;
   if (Array.isArray(rdap.entities)) {
-    const regEntity = rdap.entities.find((e: any) => e.roles && e.roles.includes("registrar"));
+    const regEntity = rdap.entities.find((e: any) =>
+      e.roles && e.roles.includes("registrar")
+    );
     if (regEntity) {
       registrarName =
         regEntity.vcardArray && getVCardField(regEntity.vcardArray, "fn")
@@ -119,7 +123,10 @@ function rdapToWhois(rdap: any): any {
     }
   }
   // If registrar is Cloudflare, Inc. but no URL is provided, override it.
-  if (registrarName === "Cloudflare, Inc." && (registrarUrl === dunno || !registrarUrl)) {
+  if (
+    registrarName === "Cloudflare, Inc." &&
+    (registrarUrl === dunno || !registrarUrl)
+  ) {
     registrarUrl = "https://www.cloudflare.com";
   }
   // Registrant (WHOIS) information from an entity with role "registrant"
@@ -131,15 +138,21 @@ function rdapToWhois(rdap: any): any {
   let registrantStateProvince = dunno;
   let registrantPostalCode = dunno;
   if (Array.isArray(rdap.entities)) {
-    const regEntity = rdap.entities.find((e: any) => e.roles && e.roles.includes("registrant"));
+    const regEntity = rdap.entities.find((e: any) =>
+      e.roles && e.roles.includes("registrant")
+    );
     if (regEntity && regEntity.vcardArray) {
       registrantName = getVCardField(regEntity.vcardArray, "fn") || dunno;
-      registrantOrganization = getVCardField(regEntity.vcardArray, "org") || dunno;
+      registrantOrganization = getVCardField(regEntity.vcardArray, "org") ||
+        dunno;
       registrantStreet = getVCardField(regEntity.vcardArray, "street") || dunno;
       registrantCity = getVCardField(regEntity.vcardArray, "locality") || dunno;
-      registrantCountry = getVCardField(regEntity.vcardArray, "country-name") || dunno;
-      registrantStateProvince = getVCardField(regEntity.vcardArray, "region") || dunno;
-      registrantPostalCode = getVCardField(regEntity.vcardArray, "postal-code") || dunno;
+      registrantCountry = getVCardField(regEntity.vcardArray, "country-name") ||
+        dunno;
+      registrantStateProvince = getVCardField(regEntity.vcardArray, "region") ||
+        dunno;
+      registrantPostalCode =
+        getVCardField(regEntity.vcardArray, "postal-code") || dunno;
     }
   }
   // Abuse contact information from an entity with role "abuse" (searched recursively)
@@ -148,7 +161,8 @@ function rdapToWhois(rdap: any): any {
   if (Array.isArray(rdap.entities)) {
     const abuseEntity = findAbuse(rdap.entities);
     if (abuseEntity && abuseEntity.vcardArray) {
-      abuseContactEmail = getVCardField(abuseEntity.vcardArray, "email") || dunno;
+      abuseContactEmail = getVCardField(abuseEntity.vcardArray, "email") ||
+        dunno;
       abuseContactPhone = getVCardField(abuseEntity.vcardArray, "tel") || dunno;
       if (abuseContactPhone.startsWith("tel:")) {
         abuseContactPhone = abuseContactPhone.substring(4);
@@ -156,10 +170,16 @@ function rdapToWhois(rdap: any): any {
     }
   }
   // Override abuse info for Cloudflare if missing.
-  if ((!abuseContactEmail || abuseContactEmail === dunno) && registrarName === "Cloudflare, Inc.") {
+  if (
+    (!abuseContactEmail || abuseContactEmail === dunno) &&
+    registrarName === "Cloudflare, Inc."
+  ) {
     abuseContactEmail = "registrar-abuse@cloudflare.com";
   }
-  if ((!abuseContactPhone || abuseContactPhone === dunno) && registrarName === "Cloudflare, Inc.") {
+  if (
+    (!abuseContactPhone || abuseContactPhone === dunno) &&
+    registrarName === "Cloudflare, Inc."
+  ) {
     abuseContactPhone = "+1.4153197517";
   }
   // DNSSEC: if secureDNS.delegationSigned is available, use it.
@@ -206,55 +226,75 @@ function getVCardField(vcardArray: any, fieldName: string): string | undefined {
 
 /* --------------------------- DNS LOOKUPS --------------------------- */
 async function getIpAddress(domain: string): Promise<string[]> {
-  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`;
-  const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.Answer ? data.Answer.filter((r: any) => r.type === 1).map((r: any) => r.data) : [];
-}
-
-async function getIpv6Address(domain: string): Promise<string[]> {
-  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=AAAA`;
-  const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.Answer ? data.Answer.filter((r: any) => r.type === 28).map((r: any) => r.data) : [];
-}
-
-async function getNameServers(domain: string): Promise<string[]> {
-  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`;
+  const url = `https://cloudflare-dns.com/dns-query?name=${
+    encodeURIComponent(domain)
+  }&type=A`;
   const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
   if (!res.ok) return [];
   const data = await res.json();
   return data.Answer
-    ? data.Answer.filter((r: any) => r.type === 2).map((r: any) => r.data.replace(/\.$/, ""))
+    ? data.Answer.filter((r: any) => r.type === 1).map((r: any) => r.data)
+    : [];
+}
+
+async function getIpv6Address(domain: string): Promise<string[]> {
+  const url = `https://cloudflare-dns.com/dns-query?name=${
+    encodeURIComponent(domain)
+  }&type=AAAA`;
+  const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.Answer
+    ? data.Answer.filter((r: any) => r.type === 28).map((r: any) => r.data)
+    : [];
+}
+
+async function getNameServers(domain: string): Promise<string[]> {
+  const url = `https://cloudflare-dns.com/dns-query?name=${
+    encodeURIComponent(domain)
+  }&type=NS`;
+  const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.Answer
+    ? data.Answer.filter((r: any) => r.type === 2).map((r: any) =>
+      r.data.replace(/\.$/, "")
+    )
     : [];
 }
 
 async function getMxRecords(domain: string): Promise<string[]> {
-  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`;
+  const url = `https://cloudflare-dns.com/dns-query?name=${
+    encodeURIComponent(domain)
+  }&type=MX`;
   const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
   if (!res.ok) return [];
   const data = await res.json();
   return data.Answer
     ? data.Answer.filter((r: any) => r.type === 15).map((r: any) => {
-        const parts = r.data.split(" ");
-        if (parts.length >= 2) {
-          const priority = parts[0];
-          const exchange = parts.slice(1).join(" ").replace(/\.$/, "");
-          return `${exchange} (priority: ${priority})`;
-        }
-        return r.data;
-      })
+      const parts = r.data.split(" ");
+      if (parts.length >= 2) {
+        const priority = parts[0];
+        const exchange = parts.slice(1).join(" ").replace(/\.$/, "");
+        return `${exchange} (priority: ${priority})`;
+      }
+      return r.data;
+    })
     : [];
 }
 
 async function getTxtRecords(domain: string): Promise<string[]> {
-  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=TXT`;
+  const url = `https://cloudflare-dns.com/dns-query?name=${
+    encodeURIComponent(domain)
+  }&type=TXT`;
   const res = await fetch(url, { headers: { Accept: "application/dns-json" } });
   if (!res.ok) return [];
   const data = await res.json();
-  return data.Answer ? data.Answer.filter((r: any) => r.type === 16).map((r: any) => r.data.replace(/"/g, "")) : [];
+  return data.Answer
+    ? data.Answer.filter((r: any) => r.type === 16).map((r: any) =>
+      r.data.replace(/"/g, "")
+    )
+    : [];
 }
 
 /* --------------------------- SSL CERTIFICATE LOOKUP --------------------------- */
@@ -264,9 +304,11 @@ async function getTxtRecords(domain: string): Promise<string[]> {
  */
 async function getSslCertificateDetails(domain: string): Promise<any> {
   try {
-    const url = `https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(
-      domain,
-    )}&fromCache=on&all=done`;
+    const url = `https://api.ssllabs.com/api/v3/analyze?host=${
+      encodeURIComponent(
+        domain,
+      )
+    }&fromCache=on&all=done`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("SSL Labs fetch failed");
     const data = await res.json();
@@ -279,7 +321,7 @@ async function getSslCertificateDetails(domain: string): Promise<any> {
     ) {
       const cert = data.certs[0];
       return {
-        issuer: cert.issuerSubject	|| "",
+        issuer: cert.issuerSubject || "",
         valid_from: cert.notBefore || "",
         valid_to: cert.notAfter || "",
         subject: cert.subject || "",
@@ -298,7 +340,9 @@ async function getSslCertificateDetails(domain: string): Promise<any> {
 /* --------------------------- HOST/GEOLCATION LOOKUP --------------------------- */
 async function getHostData(ip: string): Promise<any> {
   try {
-    const url = `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=12249`;
+    const url = `https://ip-api.com/json/${
+      encodeURIComponent(ip)
+    }?fields=12249`;
     const res = await fetch(url);
     if (!res.ok) return {};
     return await res.json();
@@ -323,33 +367,56 @@ async function handler(req: Request): Promise<Response> {
     const { searchParams } = new URL(req.url);
     const domain = searchParams.get("domain");
     if (!domain) {
-      return new Response(JSON.stringify({ error: "Domain name is required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Domain name is required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
     const errors: string[] = [];
 
     // WHOIS/RDAP lookup
-    const whoisRaw = await safeExecute(() => getWhoisData(domain), "WHOIS lookup failed", errors);
+    const whoisRaw = await safeExecute(
+      () => getWhoisData(domain),
+      "WHOIS lookup failed",
+      errors,
+    );
     if (!whoisRaw) {
-      return new Response(JSON.stringify({ error: "Failed to fetch WHOIS data" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch WHOIS data" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Normalize registrant (WHOIS) fields:
     // If missing, fill with "DATA REDACTED"
     const normalizedWhois = {
-      name: whoisRaw.registrantName !== dunno ? whoisRaw.registrantName : "DATA REDACTED",
-      organization:
-        whoisRaw.registrantOrganization !== dunno ? whoisRaw.registrantOrganization : "DATA REDACTED",
-      street: whoisRaw.registrantStreet !== dunno ? whoisRaw.registrantStreet : "DATA REDACTED",
-      city: whoisRaw.registrantCity !== dunno ? whoisRaw.registrantCity : "DATA REDACTED",
-      country: whoisRaw.registrantCountry !== dunno ? whoisRaw.registrantCountry : "DATA REDACTED",
-      state: whoisRaw.registrantStateProvince !== dunno ? whoisRaw.registrantStateProvince : "DATA REDACTED",
-      postal_code: whoisRaw.registrantPostalCode !== dunno ? whoisRaw.registrantPostalCode : "DATA REDACTED",
+      name: whoisRaw.registrantName !== dunno
+        ? whoisRaw.registrantName
+        : "DATA REDACTED",
+      organization: whoisRaw.registrantOrganization !== dunno
+        ? whoisRaw.registrantOrganization
+        : "DATA REDACTED",
+      street: whoisRaw.registrantStreet !== dunno
+        ? whoisRaw.registrantStreet
+        : "DATA REDACTED",
+      city: whoisRaw.registrantCity !== dunno
+        ? whoisRaw.registrantCity
+        : "DATA REDACTED",
+      country: whoisRaw.registrantCountry !== dunno
+        ? whoisRaw.registrantCountry
+        : "DATA REDACTED",
+      state: whoisRaw.registrantStateProvince !== dunno
+        ? whoisRaw.registrantStateProvince
+        : "DATA REDACTED",
+      postal_code: whoisRaw.registrantPostalCode !== dunno
+        ? whoisRaw.registrantPostalCode
+        : "DATA REDACTED",
     };
 
     // DNS lookups (run concurrently)
@@ -359,26 +426,43 @@ async function handler(req: Request): Promise<Response> {
       safeExecute(() => getNameServers(domain), "NS lookup failed", errors),
       safeExecute(() => getMxRecords(domain), "MX lookup failed", errors),
       safeExecute(() => getTxtRecords(domain), "TXT lookup failed", errors),
-      safeExecute(() => getSslCertificateDetails(domain), "SSL lookup failed", errors),
+      safeExecute(
+        () => getSslCertificateDetails(domain),
+        "SSL lookup failed",
+        errors,
+      ),
     ]);
 
     // Host/geolocation lookup using the first IPv4 address (if available)
     let host = {};
     if (ipv4 && ipv4.length > 0) {
-      host = (await safeExecute(() => getHostData(ipv4[0]), "Host lookup failed", errors)) || {};
+      host = (await safeExecute(
+        () => getHostData(ipv4[0]),
+        "Host lookup failed",
+        errors,
+      )) || {};
     }
 
     // Normalize registrar abuse info if missing
     let registrarUrl = whoisRaw.registrarUrl;
-    if (whoisRaw.registrarName === "Cloudflare, Inc." && (registrarUrl === dunno || !registrarUrl)) {
+    if (
+      whoisRaw.registrarName === "Cloudflare, Inc." &&
+      (registrarUrl === dunno || !registrarUrl)
+    ) {
       registrarUrl = "https://www.cloudflare.com";
     }
     let abuseEmail = whoisRaw.abuseContactEmail;
     let abusePhone = whoisRaw.abuseContactPhone;
-    if ((!abuseEmail || abuseEmail === dunno) && whoisRaw.registrarName === "Cloudflare, Inc.") {
+    if (
+      (!abuseEmail || abuseEmail === dunno) &&
+      whoisRaw.registrarName === "Cloudflare, Inc."
+    ) {
       abuseEmail = "registrar-abuse@cloudflare.com";
     }
-    if ((!abusePhone || abusePhone === dunno) && whoisRaw.registrarName === "Cloudflare, Inc.") {
+    if (
+      (!abusePhone || abusePhone === dunno) &&
+      whoisRaw.registrarName === "Cloudflare, Inc."
+    ) {
       abusePhone = "+1.4153197517";
     }
 
@@ -407,7 +491,9 @@ async function handler(req: Request): Promise<Response> {
         phone: abusePhone,
       },
       dns: {
-        dnssec: whoisRaw.dnssec && whoisRaw.dnssec !== dunno ? whoisRaw.dnssec : "unsigned",
+        dnssec: whoisRaw.dnssec && whoisRaw.dnssec !== dunno
+          ? whoisRaw.dnssec
+          : "unsigned",
         nameServers: ns || [],
         mxRecords: mx || [],
         txtRecords: txt || [],
@@ -417,15 +503,21 @@ async function handler(req: Request): Promise<Response> {
     };
 
     return new Response(
-      JSON.stringify({ domainInfo, errors: errors.length > 0 ? errors : undefined }),
+      JSON.stringify({
+        domainInfo,
+        errors: errors.length > 0 ? errors : undefined,
+      }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (e) {
     console.error("Error processing domain information:", e);
-    return new Response(JSON.stringify({ error: "An unexpected error occurred" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "An unexpected error occurred" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 }
 

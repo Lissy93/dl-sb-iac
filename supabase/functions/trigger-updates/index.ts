@@ -5,27 +5,32 @@
  * Logs responses, and returns a summary response
  */
 
-import { serve } from '../shared/serveWithCors.ts';
-import { getSupabaseClient } from '../shared/supabaseClient.ts';
-import { Monitor } from '../shared/monitor.ts';
+import { serve } from "../shared/serveWithCors.ts";
+import { getSupabaseClient } from "../shared/supabaseClient.ts";
+import { Monitor } from "../shared/monitor.ts";
 
 // Keys
-const DB_URL = Deno.env.get('DB_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
-const monitor = new Monitor('trigger-updates');
+const DB_URL = Deno.env.get("DB_URL") ?? Deno.env.get("SUPABASE_URL") ?? "";
+const monitor = new Monitor("trigger-updates");
 
 if (!DB_URL) {
-  throw new Error('❌ Database URL and Key must be provided.');
+  throw new Error("❌ Database URL and Key must be provided.");
 }
-const DOMAIN_UPDATER_URL = Deno.env.get('WORKER_DOMAIN_UPDATER_URL') ?? `${DB_URL}/functions/v1/domain-updater`;
+const DOMAIN_UPDATER_URL = Deno.env.get("WORKER_DOMAIN_UPDATER_URL") ??
+  `${DB_URL}/functions/v1/domain-updater`;
 
 // Helper function to call the domain updater for a specific domain and user
-async function updateDomainForUser(domain: string, userId: string, req: Request) {
+async function updateDomainForUser(
+  domain: string,
+  userId: string,
+  req: Request,
+) {
   try {
-    const jwt = req.headers.get('Authorization')?.replace('Bearer ', '');
+    const jwt = req.headers.get("Authorization")?.replace("Bearer ", "");
     const response = await fetch(DOMAIN_UPDATER_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
       },
       body: JSON.stringify({ domain, user_id: userId }),
@@ -35,12 +40,12 @@ async function updateDomainForUser(domain: string, userId: string, req: Request)
     console.info(responseBody.message);
 
     if (responseBody.error) {
-      console.error('❌', responseBody.error);
+      console.error("❌", responseBody.error);
     } else if (!response.ok) {
-      console.error('❌', response.statusText);
+      console.error("❌", response.statusText);
     }
   } catch (error) {
-    console.error('❌', (error as Error).message);
+    console.error("❌", (error as Error).message);
   }
 }
 
@@ -51,12 +56,12 @@ async function processAllDomains(req: any) {
   const startTime = performance.now();
   // Fetch all user_id and domain_name pairs from the domains table
   const { data: domains, error } = await supabase
-    .from('domains')
-    .select('user_id, domain_name');
+    .from("domains")
+    .select("user_id, domain_name");
 
   if (error || !domains) {
-    console.error('Error fetching domains:', error?.message);
-    throw new Error('Error fetching domains');
+    console.error("Error fetching domains:", error?.message);
+    throw new Error("Error fetching domains");
   }
 
   // Call the domain-updater function for each (user_id, domain_name) pair
@@ -79,7 +84,7 @@ serve(async (req) => {
     return new Response(result, { status: 200 });
   } catch (error) {
     await monitor.fail(error);
-    console.error('Unexpected error:', (error as Error).message);
-    return new Response('Internal Server Error', { status: 500 });
+    console.error("Unexpected error:", (error as Error).message);
+    return new Response("Internal Server Error", { status: 500 });
   }
 });

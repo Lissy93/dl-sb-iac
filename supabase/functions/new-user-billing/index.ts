@@ -1,31 +1,38 @@
-import { serve } from '../shared/serveWithCors.ts';
-import { getSupabaseClient } from '../shared/supabaseClient.ts';
-import { Monitor } from '../shared/monitor.ts';
-
+import { serve } from "../shared/serveWithCors.ts";
+import { getSupabaseClient } from "../shared/supabaseClient.ts";
+import { Monitor } from "../shared/monitor.ts";
 
 // Load environment variables
-const DB_URL = Deno.env.get('DB_URL') ?? '';
-const SPONSORS_API = Deno.env.get('AS93_SPONSORS_API') ?? '';
-const NOTIFICATION_URL = Deno.env.get('WORKER_SEND_NOTIFICATION_URL') ?? `${DB_URL}/functions/v1/send-notification`;
-const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+const DB_URL = Deno.env.get("DB_URL") ?? "";
+const SPONSORS_API = Deno.env.get("AS93_SPONSORS_API") ?? "";
+const NOTIFICATION_URL = Deno.env.get("WORKER_SEND_NOTIFICATION_URL") ??
+  `${DB_URL}/functions/v1/send-notification`;
+const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 
 // Ensure required environment variables are set
-if (!STRIPE_SECRET_KEY) console.warn('⚠️ Missing STRIPE_SECRET_KEY. Stripe billing checks will be skipped.');
+if (!STRIPE_SECRET_KEY) {
+  console.warn(
+    "⚠️ Missing STRIPE_SECRET_KEY. Stripe billing checks will be skipped.",
+  );
+}
 
 const STRIPE_PLAN_MAPPING: Record<string, string> = {
-  'dl_hobby_monthly': 'hobby',
-  'dl_hobby_annual': 'hobby',
-  'dl_pro_monthly': 'pro',
-  'dl_pro_annual': 'pro',
+  "dl_hobby_monthly": "hobby",
+  "dl_hobby_annual": "hobby",
+  "dl_pro_monthly": "pro",
+  "dl_pro_annual": "pro",
 };
 
-const monitor = new Monitor('user-billing-check');
+const monitor = new Monitor("user-billing-check");
 
 /**
  * Fetches a user from Supabase Auth.
  * Fails fast if the user is not found.
  */
-async function getUser(userId: string, supabase: ReturnType<typeof getSupabaseClient>): Promise<any | null> {
+async function getUser(
+  userId: string,
+  supabase: ReturnType<typeof getSupabaseClient>,
+): Promise<any | null> {
   try {
     const { data, error } = await supabase.auth.admin.getUserById(userId);
     if (error || !data?.user) {
@@ -47,12 +54,14 @@ async function fetchGitHubSponsors(): Promise<Set<string>> {
 
   try {
     const res = await fetch(`${SPONSORS_API}/lissy93`);
-    if (!res.ok) throw new Error('Failed to fetch GitHub sponsors');
+    if (!res.ok) throw new Error("Failed to fetch GitHub sponsors");
 
     const sponsors = await res.json();
-    return new Set(sponsors.map((s: { login: string }) => (s.login || '').toLowerCase()));
+    return new Set(
+      sponsors.map((s: { login: string }) => (s.login || "").toLowerCase()),
+    );
   } catch (err) {
-    console.error('❌ Error fetching GitHub sponsors:', err);
+    console.error("❌ Error fetching GitHub sponsors:", err);
     return new Set();
   }
 }
@@ -67,13 +76,14 @@ async function fetchGitHubSponsors(): Promise<Set<string>> {
  */
 async function getActiveStripePlan(customerId: string): Promise<string | null> {
   try {
-    const url = `https://api.stripe.com/v1/customers/${customerId}/subscriptions?limit=1&expand[]=data.items`;
+    const url =
+      `https://api.stripe.com/v1/customers/${customerId}/subscriptions?limit=1&expand[]=data.items`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
     const res = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: {
         Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
       },
@@ -84,42 +94,56 @@ async function getActiveStripePlan(customerId: string): Promise<string | null> {
 
     if (!res.ok) {
       const body = await res.text();
-      console.warn(`⚠️ Stripe returned error for subscriptions: ${res.status} ${body}`);
+      console.warn(
+        `⚠️ Stripe returned error for subscriptions: ${res.status} ${body}`,
+      );
       return null;
     }
 
     const data = await res.json();
     const subscription = data?.data?.[0];
     if (!subscription) {
-      console.info(`ℹ️ No active subscriptions found for customer ${customerId}`);
+      console.info(
+        `ℹ️ No active subscriptions found for customer ${customerId}`,
+      );
       return null;
     }
 
     const lookupKey = subscription.items?.data?.[0]?.price?.lookup_key;
     if (!lookupKey) {
-      console.warn(`⚠️ No price.lookup_key on active subscription for ${customerId}`);
+      console.warn(
+        `⚠️ No price.lookup_key on active subscription for ${customerId}`,
+      );
       return null;
     }
 
     console.info(`✅ Found active Stripe plan: ${lookupKey} for ${customerId}`);
     return STRIPE_PLAN_MAPPING[lookupKey] || null;
   } catch (err) {
-    console.error(`❌ Error fetching active subscription for ${customerId}:`, err);
+    console.error(
+      `❌ Error fetching active subscription for ${customerId}:`,
+      err,
+    );
     return null;
   }
 }
-
 
 /**
  * Determines the correct billing plan for a user.
  * Prioritizes Stripe over GitHub sponsorships.
  */
-async function determineBillingPlan(userId: string, stripeCustomerId: string | null, supabase: ReturnType<typeof getSupabaseClient>): Promise<string> {
-  console.info('🔍 Determining appropriate billing plan for user')
+async function determineBillingPlan(
+  userId: string,
+  stripeCustomerId: string | null,
+  supabase: ReturnType<typeof getSupabaseClient>,
+): Promise<string> {
+  console.info("🔍 Determining appropriate billing plan for user");
   const user = await getUser(userId, supabase);
   if (!user) {
-    console.error(`❌ Cannot determine billing plan. User ${userId} does not exist.`);
-    return 'free';
+    console.error(
+      `❌ Cannot determine billing plan. User ${userId} does not exist.`,
+    );
+    return "free";
   }
 
   // Check Stripe first (higher priority)
@@ -129,21 +153,27 @@ async function determineBillingPlan(userId: string, stripeCustomerId: string | n
   }
 
   // Check GitHub sponsors
-  const githubUsername = user.user_metadata?.user_name ?? user.user_metadata?.github_username;
-  if (!githubUsername || user.app_metadata?.provider !== 'github') return 'free';
+  const githubUsername = user.user_metadata?.user_name ??
+    user.user_metadata?.github_username;
+  if (!githubUsername || user.app_metadata?.provider !== "github") {
+    return "free";
+  }
 
   const sponsors = await fetchGitHubSponsors();
-  return sponsors.has(githubUsername.toLowerCase()) ? 'sponsor' : 'free';
+  return sponsors.has(githubUsername.toLowerCase()) ? "sponsor" : "free";
 }
 
 /**
  * Creates a new Stripe customer, if one doesn't yet exist
- * @param userId 
- * @returns 
+ * @param userId
+ * @returns
  */
-async function createGetStripeCustomer(userId: string, supabase: ReturnType<typeof getSupabaseClient>): Promise<string | null> {
+async function createGetStripeCustomer(
+  userId: string,
+  supabase: ReturnType<typeof getSupabaseClient>,
+): Promise<string | null> {
   if (!STRIPE_SECRET_KEY) {
-    console.warn('⚠️ Stripe not configured.');
+    console.warn("⚠️ Stripe not configured.");
     return null;
   }
 
@@ -151,7 +181,8 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
     console.info(`🔍 Looking up Stripe customer for user ${userId}`);
 
     // 1. Get user info (email required)
-    const { data: userRes, error: userErr } = await supabase.auth.admin.getUserById(userId);
+    const { data: userRes, error: userErr } = await supabase.auth.admin
+      .getUserById(userId);
     const user = userRes?.user;
     const email = user?.email;
     if (userErr || !user || !email) {
@@ -161,9 +192,9 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
 
     // 2. Check billing.meta.customer
     const { data: billing, error: billingErr } = await supabase
-      .from('billing')
-      .select('meta')
-      .eq('user_id', userId)
+      .from("billing")
+      .select("meta")
+      .eq("user_id", userId)
       .maybeSingle();
 
     const existingId = billing?.meta?.customer;
@@ -174,9 +205,12 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
 
     // 3. Search Stripe for existing customer (metadata or email)
     const metaQuery = encodeURIComponent(`metadata['user_id']:'${userId}'`);
-    const metaRes = await fetch(`https://api.stripe.com/v1/customers/search?query=${metaQuery}`, {
-      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
-    });
+    const metaRes = await fetch(
+      `https://api.stripe.com/v1/customers/search?query=${metaQuery}`,
+      {
+        headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+      },
+    );
     const metaData = await metaRes.json();
     if (metaRes.ok && metaData?.data?.length > 0) {
       const foundId = metaData.data[0].id;
@@ -184,9 +218,14 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
       return foundId;
     }
 
-    const emailRes = await fetch(`https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`, {
-      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
-    });
+    const emailRes = await fetch(
+      `https://api.stripe.com/v1/customers?email=${
+        encodeURIComponent(email)
+      }&limit=1`,
+      {
+        headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+      },
+    );
     const emailData = await emailRes.json();
     if (emailRes.ok && emailData?.data?.length > 0) {
       const foundId = emailData.data[0].id;
@@ -195,22 +234,22 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
     }
 
     // 4. Create new customer
-    const createRes = await fetch('https://api.stripe.com/v1/customers', {
-      method: 'POST',
+    const createRes = await fetch("https://api.stripe.com/v1/customers", {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
         email,
-        name: user.user_metadata?.full_name ?? '',
-        'metadata[user_id]': userId,
+        name: user.user_metadata?.full_name ?? "",
+        "metadata[user_id]": userId,
       }),
     });
 
     const customer = await createRes.json();
     if (!createRes.ok || !customer?.id) {
-      console.error('❌ Failed to create Stripe customer:', customer);
+      console.error("❌ Failed to create Stripe customer:", customer);
       return null;
     }
 
@@ -222,22 +261,24 @@ async function createGetStripeCustomer(userId: string, supabase: ReturnType<type
   }
 }
 
-
 /**
  * Ensures the user has a billing entry with the correct plan.
  */
-async function setupUserBilling(userId: string, supabase: ReturnType<typeof getSupabaseClient>) {
+async function setupUserBilling(
+  userId: string,
+  supabase: ReturnType<typeof getSupabaseClient>,
+) {
   console.log(`🔍 Checking billing for user ${userId}`);
 
   try {
     // Step 1: Fetch billing record if it exists
     const { data: existing, error: fetchError } = await supabase
-      .from('billing')
-      .select('current_plan, meta, created_at')
-      .eq('user_id', userId)
+      .from("billing")
+      .select("current_plan, meta, created_at")
+      .eq("user_id", userId)
       .maybeSingle();
 
-    const currentPlan = existing?.current_plan ?? 'free';
+    const currentPlan = existing?.current_plan ?? "free";
     const existingMeta = existing?.meta ?? {};
     console.info(`ℹ️ User ${userId} current plan: ${currentPlan}`);
 
@@ -245,7 +286,11 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
     const stripeCustomerId = await createGetStripeCustomer(userId, supabase);
 
     // Step 2: Determine correct plan
-    const newPlan = await determineBillingPlan(userId, stripeCustomerId, supabase);
+    const newPlan = await determineBillingPlan(
+      userId,
+      stripeCustomerId,
+      supabase,
+    );
     if (!newPlan) {
       console.error(`❌ Could not determine billing plan for user ${userId}`);
       return;
@@ -261,13 +306,15 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
     const timestamp = new Date().toISOString();
 
     // Do not downgrade complimentary users
-    if (currentPlan === 'complimentary' && newPlan === 'free') {
-      console.info(`⚖️ User ${userId} has complimentary plan, skipping downgrade`);
+    if (currentPlan === "complimentary" && newPlan === "free") {
+      console.info(
+        `⚖️ User ${userId} has complimentary plan, skipping downgrade`,
+      );
       return;
     }
 
     const { error: upsertError } = await supabase
-      .from('billing')
+      .from("billing")
       .upsert(
         {
           user_id: userId,
@@ -276,23 +323,23 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
           updated_at: timestamp,
           created_at: existing?.created_at ?? timestamp,
         },
-        { onConflict: 'user_id' }
+        { onConflict: "user_id" },
       );
 
     if (upsertError) throw upsertError;
 
     // Step 6: Notify user only if plan has changed and is not "free"
-    const shouldNotify = newPlan !== 'free' && newPlan !== currentPlan;
+    const shouldNotify = newPlan !== "free" && newPlan !== currentPlan;
     if (shouldNotify) {
       console.info(`📬 Sending billing upgrade notification to ${userId}`);
       fetch(NOTIFICATION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
           message: `You've been upgraded to the ${newPlan} plan! 🎉`,
         }),
-      }).catch((err) => console.error('❌ Error sending notification:', err));
+      }).catch((err) => console.error("❌ Error sending notification:", err));
     }
 
     console.info(`✅ Billing setup complete for ${userId} — Plan: ${newPlan}`);
@@ -300,7 +347,6 @@ async function setupUserBilling(userId: string, supabase: ReturnType<typeof getS
     console.error(`❌ Billing setup failed for user ${userId}:`, err);
   }
 }
-
 
 /**
  * Supabase Edge Function: Handles user signup events and manual re-checks.
@@ -315,7 +361,9 @@ serve(async (req) => {
 
     // If userId is provided, run single-user mode
     if (userId) {
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 5000));
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Operation timed out")), 5000)
+      );
       await Promise.race([setupUserBilling(userId, supabase), timeout]);
       await monitor.success(`Billing check complete for user ${userId}`);
       return new Response(JSON.stringify({ success: true }), { status: 200 });
@@ -326,7 +374,7 @@ serve(async (req) => {
     const users = usersPage?.users ?? [];
 
     if (error || !users || users.length === 0) {
-      throw new Error('Failed to fetch user list or no users found');
+      throw new Error("Failed to fetch user list or no users found");
     }
 
     let successCount = 0;
@@ -335,24 +383,38 @@ serve(async (req) => {
     for (const user of users) {
       const id = user.id;
       try {
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 2000));
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Operation timed out")), 2000)
+        );
         await Promise.race([setupUserBilling(id, supabase), timeout]);
         successCount++;
       } catch (err: any) {
-        console.warn(`⚠️ Skipping user ${id} due to timeout or error:`, err.message || err);
+        console.warn(
+          `⚠️ Skipping user ${id} due to timeout or error:`,
+          err.message || err,
+        );
         failureCount++;
       }
     }
 
-    const summary = `Billing setup complete for ${successCount} user(s), ${failureCount} failed.`;
+    const summary =
+      `Billing setup complete for ${successCount} user(s), ${failureCount} failed.`;
     await monitor.success(summary);
-    return new Response(JSON.stringify({ success: true, processed: successCount, failed: failureCount }), {
-      status: 200,
-    });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        processed: successCount,
+        failed: failureCount,
+      }),
+      {
+        status: 200,
+      },
+    );
   } catch (err: any) {
-    console.error('❌ Unexpected error:', err.message || err);
+    console.error("❌ Unexpected error:", err.message || err);
     await monitor.fail(err);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
+    });
   }
 });

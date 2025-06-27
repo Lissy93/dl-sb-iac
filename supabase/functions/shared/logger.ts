@@ -1,4 +1,4 @@
-type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+type LogLevel = "info" | "warn" | "error" | "debug";
 
 export class Logger {
   private enabled: boolean;
@@ -6,16 +6,25 @@ export class Logger {
   private centralLogUrl?: string;
   private logs: { level: LogLevel; message: string; timestamp: string }[] = [];
 
-  constructor(prefix = '') {
-    this.enabled = Deno.env.get('DL_LOGGING_ENABLED') === 'true';
+  constructor(prefix = "") {
+    this.enabled = Deno.env.get("DL_LOGGING_ENABLED") === "true";
     this.prefix = prefix;
-    this.centralLogUrl = Deno.env.get('LOGFLARE_ENDPOINT_URL') ?? Deno.env.get('DL_CENTRAL_LOG_URL');
+    this.centralLogUrl = Deno.env.get("LOGFLARE_ENDPOINT_URL") ??
+      Deno.env.get("DL_CENTRAL_LOG_URL");
   }
 
-  public info(msg: string) { this.log('info', msg, '🟢'); }
-  public warn(msg: string) { this.log('warn', msg, '🟡'); }
-  public error(msg: string) { this.log('error', msg, '🔴'); }
-  public debug(msg: string) { this.log('debug', msg, '🔍'); }
+  public info(msg: string) {
+    this.log("info", msg, "🟢");
+  }
+  public warn(msg: string) {
+    this.log("warn", msg, "🟡");
+  }
+  public error(msg: string) {
+    this.log("error", msg, "🔴");
+  }
+  public debug(msg: string) {
+    this.log("debug", msg, "🔍");
+  }
 
   private log(level: LogLevel, msg: string, icon: string) {
     const timestamp = new Date().toISOString();
@@ -26,9 +35,9 @@ export class Logger {
     if (!this.enabled) return;
 
     try {
-      level === 'error'
+      level === "error"
         ? console.error(formatted)
-        : level === 'warn'
+        : level === "warn"
         ? console.warn(formatted)
         : console.log(formatted);
     } catch {}
@@ -49,12 +58,12 @@ export class Logger {
         logs: this.logs,
       };
       await fetch(this.centralLogUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }).catch(err => this.warn('Logflare send error: ' + err.message));
+      }).catch((err) => this.warn("Logflare send error: " + err.message));
     } catch (_) {
-      this.warn('Error in flushToRemote');
+      this.warn("Error in flushToRemote");
     }
   }
 }

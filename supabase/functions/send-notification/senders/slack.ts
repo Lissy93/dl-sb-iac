@@ -4,7 +4,10 @@ import { handleError } from "../error-handler.ts";
 /**
  * Sends a Slack notification using a webhook URL.
  */
-export async function sendSlackNotification(config: SlackConfig, message: string): Promise<void> {
+export async function sendSlackNotification(
+  config: SlackConfig,
+  message: string,
+): Promise<void> {
   try {
     if (!config.webhookUrl) {
       throw new Error("Slack Webhook URL is required.");
@@ -19,7 +22,10 @@ export async function sendSlackNotification(config: SlackConfig, message: string
     });
 
     if (!response.ok) {
-      throw new Error(`Slack request failed with status ${response.status}: ${await response.text()}`);
+      throw new Error(
+        `Slack request failed with status ${response.status}: ${await response
+          .text()}`,
+      );
     }
 
     console.log(`✅ Slack message sent successfully`);

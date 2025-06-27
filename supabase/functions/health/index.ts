@@ -1,13 +1,11 @@
-import { serve } from '../shared/serveWithCors.ts';
+import { serve } from "../shared/serveWithCors.ts";
 
-import { getSupabaseClient, getUserOrNull } from '../shared/supabaseClient.ts';
-import { Logger } from '../shared/logger.ts';
+import { getSupabaseClient, getUserOrNull } from "../shared/supabaseClient.ts";
+import { Logger } from "../shared/logger.ts";
 
-
-const logger = new Logger('health');
+const logger = new Logger("health");
 
 serve(async (req) => {
-  
   const start = Date.now();
 
   let authenticated = false;
@@ -22,7 +20,7 @@ serve(async (req) => {
     // Check DB
     try {
       const supabase = getSupabaseClient(req, true);
-      const { error } = await supabase.rpc('pg_version');
+      const { error } = await supabase.rpc("pg_version");
       db = !error;
     } catch (dbError) {
       logger.warn(`Database check failed: ${dbError}`);
@@ -30,9 +28,8 @@ serve(async (req) => {
     }
 
     // Check required env
-    const required = ['DB_URL', 'DB_ANON_KEY'];
+    const required = ["DB_URL", "DB_ANON_KEY"];
     envOk = required.every((key) => !!Deno.env.get(key));
-
   } catch (err: any) {
     logger.warn(`Health check error: ${err.message}`);
   }
@@ -49,6 +46,6 @@ serve(async (req) => {
   logger.debug(`Health check: ${JSON.stringify(result)}`);
   return new Response(JSON.stringify(result), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
-}, ['GET']);
+}, ["GET"]);

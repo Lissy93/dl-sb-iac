@@ -13,5 +13,9 @@ export function handleError(error: any, context?: string): void {
   console.error(errorMessage, error.details ?? error);
 
   // Optionally log to external systems here (e.g., Sentry, GlitchTip)
-  throw new NotificationError("NOTIFICATION_ERROR", errorMessage, error.details);
+  throw new NotificationError(
+    "NOTIFICATION_ERROR",
+    errorMessage,
+    error.details,
+  );
 }

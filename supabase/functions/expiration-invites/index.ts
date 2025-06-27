@@ -1,29 +1,29 @@
-import { serve } from '../shared/serveWithCors.ts';
+import { serve } from "../shared/serveWithCors.ts";
 
-import { getSupabaseClient } from '../shared/supabaseClient.ts';
-import { Monitor } from '../shared/monitor.ts';
+import { getSupabaseClient } from "../shared/supabaseClient.ts";
+import { Monitor } from "../shared/monitor.ts";
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const RESEND_SENDER = Deno.env.get('RESEND_SENDER') || 'reminders@domain-locker.com';
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+const RESEND_SENDER = Deno.env.get("RESEND_SENDER") ||
+  "reminders@domain-locker.com";
 
-const APP_BASE_URL = Deno.env.get('DL_BASE_URL') || 'https://domain-locker.com';
+const APP_BASE_URL = Deno.env.get("DL_BASE_URL") || "https://domain-locker.com";
 
-const monitor = new Monitor('expiration-invites');
+const monitor = new Monitor("expiration-invites");
 
 serve(async (req) => {
-
   monitor.start(req);
 
   const supabase = getSupabaseClient(req);
-  
-  console.log('🔁 Checking for expiring domains');
+
+  console.log("🔁 Checking for expiring domains");
 
   const targetDate = new Date();
   targetDate.setDate(targetDate.getDate() + 90);
-  const dateStr = targetDate.toISOString().split('T')[0];
+  const dateStr = targetDate.toISOString().split("T")[0];
 
   const { data: expiring, error } = await supabase
-    .from('domains')
+    .from("domains")
     .select(`
       id,
       domain_name,
@@ -31,17 +31,17 @@ serve(async (req) => {
       user_id,
       registrars(name, url)
     `)
-    .eq('expiry_date', dateStr);
+    .eq("expiry_date", dateStr);
 
   if (error) {
-    console.error('❌ Error querying domains:', error);
-    return new Response('Query error', { status: 500 });
+    console.error("❌ Error querying domains:", error);
+    return new Response("Query error", { status: 500 });
   }
 
   if (!expiring || expiring.length === 0) {
-    console.log('✅ No domains expiring in 90 days');
-    monitor.success('No upcoming expirations');
-    return new Response('No upcoming expirations', { status: 200 });
+    console.log("✅ No domains expiring in 90 days");
+    monitor.success("No upcoming expirations");
+    return new Response("No upcoming expirations", { status: 200 });
   }
 
   for (const domain of expiring) {
@@ -56,11 +56,13 @@ serve(async (req) => {
         continue;
       }
 
-      const registrar = registrars?.name || 'your registrar';
+      const registrar = registrars?.name || "your registrar";
       const registrarUrl = registrars?.url || APP_BASE_URL;
 
       const title = `🌐 ${domain_name} expiration`;
-      const desc = `Heads up! Your domain ${domain_name} is set to expire on ${formatDate(expiry_date)}.
+      const desc = `Heads up! Your domain ${domain_name} is set to expire on ${
+        formatDate(expiry_date)
+      }.
 We recommend logging into your registrar (${registrar}) to confirm that auto-renew is enabled or manually renew the domain to avoid any service disruptions.
 
 This reminder was added via Domain Locker.
@@ -72,43 +74,47 @@ Manage all your domains here: ${APP_BASE_URL}`;
         date: expiry_date,
         domain: domain_name,
         url: registrarUrl,
-        userName: userData.user?.user_metadata?.full_name || 'Domain Owner',
+        userName: userData.user?.user_metadata?.full_name || "Domain Owner",
         userEmail: email,
       });
 
       console.log(`📅 Sending reminder for ${domain_name} to ${email}`);
 
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
+      const emailRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           from: RESEND_SENDER,
           to: email,
           subject: `Domain Expiration: ${domain_name}`,
-          html: `<p>${desc.replace(/\n/g, '<br>')}</p>`,
+          html: `<p>${desc.replace(/\n/g, "<br>")}</p>`,
           attachments: [
             {
               filename: `${domain_name}-expiration.ics`,
               content: icsContent,
-              content_type: 'text/calendar',
-              disposition: 'attachment',
-            }
+              content_type: "text/calendar",
+              disposition: "attachment",
+            },
           ],
         }),
       });
 
       if (!emailRes.ok) {
         const err = await emailRes.json();
-        monitor.fail(`Failed to send invite for ${domain_name}: ${err.message}`);
+        monitor.fail(
+          `Failed to send invite for ${domain_name}: ${err.message}`,
+        );
         console.error(`❌ Failed to send invite to ${email}:`, err);
         continue;
       }
     } catch (err: any) {
-      monitor.fail(`Error processing domain ${domain.domain_name}: ${err.message}`);
-      console.error('❌ Failed processing domain:', err);
+      monitor.fail(
+        `Error processing domain ${domain.domain_name}: ${err.message}`,
+      );
+      console.error("❌ Failed processing domain:", err);
     }
   }
   const resMessage = `Sent ${expiring.length} expiration events`;
@@ -121,9 +127,18 @@ function formatDate(date: string): string {
     const d = new Date(date);
     if (isNaN(d.getTime())) return date;
     const day = d.getDate();
-    const ord = ['th','st','nd','rd'][(day%10>3||~~((day%100)/10)==1)?0:day%10];
-    return `${day}${ord} ${d.toLocaleString('en-US', { month: 'long' })} ${d.getFullYear()}`;
-  } catch { return date; }
+    const ord = [
+      "th",
+      "st",
+      "nd",
+      "rd",
+    ][(day % 10 > 3 || ~~((day % 100) / 10) == 1) ? 0 : day % 10];
+    return `${day}${ord} ${
+      d.toLocaleString("en-US", { month: "long" })
+    } ${d.getFullYear()}`;
+  } catch {
+    return date;
+  }
 }
 
 function buildICS({
@@ -133,7 +148,7 @@ function buildICS({
   domain,
   url,
   userName,
-  userEmail
+  userEmail,
 }: {
   title: string;
   description: string;
@@ -143,19 +158,19 @@ function buildICS({
   userName: string;
   userEmail: string;
 }): string {
-  const start = date.replace(/-/g, '');
+  const start = date.replace(/-/g, "");
   const uid = `${domain}@domain-locker.com`;
 
   const end = new Date(date);
   end.setDate(end.getDate() + 1);
-  const endStr = end.toISOString().split('T')[0].replace(/-/g, '');
-  const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
+  const endStr = end.toISOString().split("T")[0].replace(/-/g, "");
+  const now = new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z";
 
   const escapedDescription = description
-  .replace(/\\/g, '\\\\')
-  .replace(/\n/g, '\\n')
-  .replace(/,/g, '\\,')
-  .replace(/;/g, '\\;');
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
