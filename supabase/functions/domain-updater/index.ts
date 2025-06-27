@@ -213,10 +213,10 @@ async function updateWhoisInfo(
   const whoisFields = [
     { apiField: "name", dbField: "name" },
     { apiField: "organization", dbField: "organization" },
-    { apiField: "stateProvince", dbField: "state" },
+    { apiField: "state", dbField: "state" },
     { apiField: "city", dbField: "city" },
     { apiField: "country", dbField: "country" },
-    { apiField: "postalCode", dbField: "postal_code" },
+    { apiField: "postal_code", dbField: "postal_code" },
   ];
 
   for (const { apiField, dbField } of whoisFields) {
@@ -340,7 +340,7 @@ async function updateDomainData(
     // 4. IP Addresses
     const ipVersions = ["ipv4", "ipv6"];
     for (const version of ipVersions) {
-      const newIps = domainInfo.ipAddresses[version].map((ip: string) =>
+      const newIps = domainInfo.ip_addresses[version].map((ip: string) =>
         ip.toLowerCase()
       );
       const { data: currentIps } = await supabase.from("ip_addresses").select(
@@ -390,8 +390,8 @@ async function updateDomainData(
     if (existingSsl) {
       if (
         isDifferentCaseInsensitive(domainInfo.ssl.issuer, existingSsl.issuer) ||
-        !areDatesEqual(domainInfo.ssl.validFrom, existingSsl.valid_from) ||
-        !areDatesEqual(domainInfo.ssl.validTo, existingSsl.valid_to)
+        !areDatesEqual(domainInfo.ssl.valid_from, existingSsl.valid_from) ||
+        !areDatesEqual(domainInfo.ssl.valid_to, existingSsl.valid_to)
       ) {
         // Record any detected change
         await recordDomainChange(
@@ -408,8 +408,8 @@ async function updateDomainData(
           .from("ssl_certificates")
           .update({
             issuer: domainInfo.ssl.issuer,
-            valid_from: domainInfo.ssl.validFrom,
-            valid_to: domainInfo.ssl.validTo,
+            valid_from: domainInfo.ssl.valid_from,
+            valid_to: domainInfo.ssl.valid_to,
           })
           .eq("domain_id", domainId);
       }
@@ -418,8 +418,8 @@ async function updateDomainData(
       await supabase.from("ssl_certificates").insert({
         domain_id: domainId,
         issuer: domainInfo.ssl.issuer,
-        valid_from: domainInfo.ssl.validFrom,
-        valid_to: domainInfo.ssl.validTo,
+        valid_from: domainInfo.ssl.valid_from,
+        valid_to: domainInfo.ssl.valid_to,
       });
     }
 
@@ -465,30 +465,30 @@ async function updateDomainData(
     }
 
     // 7. Dates
-    if (!areDatesEqual(domainInfo.dates.expiry, currentDomain.expiry_date)) {
+    if (!areDatesEqual(domainInfo.dates.expiry_date, currentDomain.expiry_date)) {
       await recordDomainChange(
         domainId,
         userId,
         "updated",
         "dates_expiry",
         currentDomain.expiry_date,
-        domainInfo.dates.expiry,
+        domainInfo.dates.expiry_date,
       );
       await supabase.from("domains").update({
-        expiry_date: domainInfo.dates.expiry,
+        expiry_date: domainInfo.dates.expiry_date,
       }).eq("id", domainId);
     }
-    if (!areDatesEqual(domainInfo.dates.updated, currentDomain.updated_date)) {
+    if (!areDatesEqual(domainInfo.dates.updated_date, currentDomain.updated_date)) {
       await recordDomainChange(
         domainId,
         userId,
         "updated",
         "dates_updated",
         currentDomain.updated_date,
-        domainInfo.dates.updated,
+        domainInfo.dates.updated_date,
       );
       await supabase.from("domains").update({
-        updated_date: domainInfo.dates.updated,
+        updated_date: domainInfo.dates.updated_date,
       }).eq("id", domainId);
     }
   } catch (error) {
