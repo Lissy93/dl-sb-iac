@@ -64,7 +64,6 @@ You'll need to configure the following GitHub secrets to authenticate:
   SUPABASE_DB_PASSWORD    - The Postgres password for your Supabase DB
   SUPABASE_ENV_FILE       - Raw text env vars for all else you need (see below)
 
-
 ================================================================================
 FUNCTIONS
 ================================================================================
@@ -112,14 +111,12 @@ There's some shared utils that all/most the functions use, these are:
   - Can integrate with external monitoring services for better insights
 - serveWithCors
   - Wraps Deno HTTP server, but with shared headers and config set
-  - Mostly used for handling CORS and common response headers
-  - Set `APP_ORIGIN` to allow specific origins to make requests
+  - Handles CORS preflight requests, using `APP_ORIGIN` for allowed domains
+  - Throws suitable error for unauthorized, unsupported or bad requests
 - supabaseClient
   - Provides a shared Supabase client for functions
-  - Handles authentication and authorization for requests
-  - Permissions and access is determined by the JWT bearer token passed
-  - So users can call endpoints with RLS applied, to restrict access
-
+  - Handles authentication and authorization for user requests
+  - Uses the JWT from bearer token to apply correct permissions and RLS
 
 ================================================================================
 ENVIRONMENT VARIABLES
@@ -129,7 +126,6 @@ Supabase:
   DB_KEY - The anon key to your new Supabase project
 
 Config:
-  DL_LOGGING_ENABLED - Enable or disable logging
   APP_ORIGIN - The origin URL for client-app (for CORS)
 
 Monitoring:
@@ -137,6 +133,7 @@ Monitoring:
   GLITCHTIP_URL - URL to your GlitchTip/Sentry instance
   GLITCHTIP_TOKEN - DSN token for GlitchTip/Sentry
   LOGFLARE_ENDPOINT_URL - The Logflare endpoint URL
+  DL_LOGGING_ENABLED - Enable or disable logging
 
 Authentication
   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID   - Google OAuth Client ID
@@ -180,7 +177,9 @@ Telegram
 
 It's advisable to use a secret store for this. We use Supabase Vault.
 Or, you can pass secrets to Supabase, by running:
-supabase secrets set --env-file supabase/functions/.env
+  - supabase secrets set --env-file supabase/functions/.env
+Or, to edit a single variable:
+  - supabase secrets set VAR_NAME=some_value
 
 
 ================================================================================

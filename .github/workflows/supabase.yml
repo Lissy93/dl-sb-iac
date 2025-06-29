@@ -1,8 +1,11 @@
+# Deploys Supabase config, serverless functions and database schema migrations
+# to an array of Supabase instances, defined by the `matrix` strategy
+
 name: 🚀 Deploy to Supabase
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -12,14 +15,10 @@ jobs:
     strategy:
       matrix:
         include:
-        - environment: dev
-          project_id: domain-locker-dev
-          config_file: supabase/config.dev.toml
-          secrets_prefix: DEV
-        - environment: demo
-          project_id: domain-locker-demo
-          config_file: supabase/config.demo.toml
-          secrets_prefix: DEMO
+          - environment: dev
+            secrets_prefix: DEV
+          - environment: demo
+            secrets_prefix: DEMO
 
     env:
       SUPABASE_PROJECT_ID: ${{ secrets[format('SUPABASE_PROJECT_ID_{0}', matrix.secrets_prefix)] }}
@@ -47,8 +46,8 @@ jobs:
 
       - name: 🔧 Push Config to Supabase
         run: |
-            cp "$CONFIG_FILE" supabase/config.toml
-            supabase config push
+          cp "$CONFIG_FILE" supabase/config.toml
+          supabase config push
 
       - name: 🗃️ Apply DB Migrations
         run: yes | supabase db push
@@ -59,4 +58,4 @@ jobs:
           supabase secrets set --env-file=.env
 
       - name: 🛫 Deploy Edge Functions
-        run: supabase functions deploy --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_ID"
