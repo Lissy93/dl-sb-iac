@@ -12,6 +12,7 @@ const enabledMonitors = [
   "cleanup-notifications",
   "user-billing-check",
   "cleanup-monitor-data",
+  "domain-update-batcher",
 ];
 
 export interface MonitorOptions {
