@@ -16,12 +16,11 @@ serve(async (req) => {
   const retryCutoff = new Date(Date.now() - 60 * 1000);
 
   try {
-    // Fetch 20 queued jobs
+    // Fetch 20 queued jobs (or stuck in_progress jobs that can be retried)
     const { data: jobs, error } = await supabase
       .from('domain_update_jobs')
       .select('*')
-      .eq('status', 'queued')
-      .or('last_attempt_at.is.null,last_attempt_at.lt.' + retryCutoff.toISOString())
+      .or(`status.eq.queued,and(status.eq.in_progress,last_attempt_at.lt.${retryCutoff.toISOString()})`)
       .order('last_attempt_at', { ascending: true })
       .limit(jobsToFetch);
 
