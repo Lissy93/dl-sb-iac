@@ -31,6 +31,7 @@ export class Monitor {
   private jobName?: string;
   private enabled: boolean = false;
   private cronHeader: string = "X-Cron-Run";
+  private startTime?: number;
 
   constructor(jobName: string, opts: MonitorOptions = {}) {
     this.jobName = jobName;
@@ -47,19 +48,19 @@ export class Monitor {
   }
 
   // Log info and ping success endpoint
-  public success(msg = "Job completed successfully") {
+  public async success(msg = "Job completed successfully") {
     console.info(`✅ [${this.jobName}] ${msg}`);
-    this.ping("success", msg); // default = success
+    await this.ping("success", msg); // default = success
   }
 
   // Log error, send to glitchtip, ping fail endpoint
-  public fail(error: any, context: Record<string, any> = {}) {
+  public async fail(error: any, context: Record<string, any> = {}) {
     const errMessage = error?.message || "Unknown error";
     console.error(`❌ [${this.jobName}] ${errMessage}`);
     if (this.glitchtipUrl && this.glitchtipToken) {
       this.sendToGlitchTip(error, context);
     }
-    this.ping("fail");
+    await this.ping("fail");
   }
 
   private isCronRun(req?: Request): boolean {
@@ -70,14 +71,24 @@ export class Monitor {
     if (!this.isCronRun(req)) {
       this.enabled = false;
     }
+    this.startTime = Date.now();
     console.info(`🔄 [${this.jobName}] Job started`);
     this.ping("start");
   }
 
   // Ping healthchecks.io
-  private ping(type?: "start" | "fail" | "success", message?: string) {
+  private async ping(type?: "start" | "fail" | "success", message?: string) {
     if (!this.healthcheckUrl) return;
     if (!this.enabled) return;
+
+    // Add delay if job completed too quickly (< 200ms) to prevent race condition
+    if ((type === "success" || type === "fail") && this.startTime) {
+      const elapsed = Date.now() - this.startTime;
+      if (elapsed < 200) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
     let url = `${this.healthcheckUrl}/${this.jobName}`;
 
     let method: "GET" | "POST" = "GET";
