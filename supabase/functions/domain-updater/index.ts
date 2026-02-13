@@ -245,8 +245,8 @@ async function updateDomainData(
     // 1. Registrar
     if (
       isDifferentCaseInsensitive(
-        domainInfo.registrar.name,
-        currentDomain.registrars.name,
+        domainInfo.registrar?.name,
+        currentDomain.registrars?.name,
       )
     ) {
       await recordDomainChange(
@@ -254,29 +254,31 @@ async function updateDomainData(
         userId,
         "updated",
         "registrar",
-        currentDomain.registrars.name,
-        domainInfo.registrar.name,
+        currentDomain.registrars?.name ?? null,
+        domainInfo.registrar?.name ?? null,
       );
-      const { data: existingRegistrar } = await supabase.from("registrars")
-        .select("id").ilike("name", domainInfo.registrar.name).single();
+      if (domainInfo.registrar?.name) {
+        const { data: existingRegistrar } = await supabase.from("registrars")
+          .select("id").ilike("name", domainInfo.registrar.name).single();
 
-      if (existingRegistrar) {
-        await supabase.from("domains").update({
-          registrar_id: existingRegistrar.id,
-        }).eq("id", domainId);
-      } else {
-        const { data: newRegistrar } = await supabase
-          .from("registrars")
-          .insert({
-            name: domainInfo.registrar.name,
-            url: domainInfo.registrar.url,
-          })
-          .select("id")
-          .single();
-        if (newRegistrar) {
+        if (existingRegistrar) {
           await supabase.from("domains").update({
-            registrar_id: newRegistrar.id,
+            registrar_id: existingRegistrar.id,
           }).eq("id", domainId);
+        } else {
+          const { data: newRegistrar } = await supabase
+            .from("registrars")
+            .insert({
+              name: domainInfo.registrar.name,
+              url: domainInfo.registrar.url,
+            })
+            .select("id")
+            .single();
+          if (newRegistrar) {
+            await supabase.from("domains").update({
+              registrar_id: newRegistrar.id,
+            }).eq("id", domainId);
+          }
         }
       }
     }

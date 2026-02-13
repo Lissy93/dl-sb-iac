@@ -17,6 +17,7 @@ create index if not exists idx_update_jobs_status_attempted_at
 alter table public.domain_update_jobs enable row level security;
 
 -- 4. Allow only service role to access this table
+drop policy if exists "Service can manage jobs" on public.domain_update_jobs;
 create policy "Service can manage jobs"
   on public.domain_update_jobs
   for all

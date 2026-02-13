@@ -11,7 +11,7 @@ seed:
 
 secrets:
 	@echo "🔐 Setting secrets"
-	@$(SUPABASE) secrets set-from-env
+	@$(SUPABASE) secrets set --env-file .env
 
 config:
 	@echo "⚙️ Applying configuration"
