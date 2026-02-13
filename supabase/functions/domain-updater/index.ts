@@ -7,6 +7,7 @@
 
 import { serve } from "../shared/serveWithCors.ts";
 import { getSupabaseClient } from "../shared/supabaseClient.ts";
+import { Logger } from "../shared/logger.ts";
 
 // Endpoints
 const AS93_DOMAIN_INFO_URL = Deno.env.get("AS93_DOMAIN_INFO_URL") ?? "";
@@ -15,6 +16,7 @@ const AS93_DOMAIN_INFO_KEY = Deno.env.get("AS93_DOMAIN_INFO_KEY") ?? "";
 let changeCount = 0;
 
 let supabase: ReturnType<typeof getSupabaseClient>;
+const logger = new Logger("[domain-updater]");
 
 // Fetch domain data from the DigitalOcean serverless endpoint
 async function fetchDomainData(domain: string) {
@@ -33,13 +35,13 @@ async function fetchDomainData(domain: string) {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch domain data: ${response.statusText}`);
+      throw new Error(`Upstream API returned an error for ${domain}: ${response.statusText}`);
     }
 
     const data = await response.json();
     return data.body.domainInfo;
   } catch (error) {
-    console.error(`Error fetching domain data: ${(error as Error).message}`);
+    logger.error(`Failed to fetch data for ${domain}: ${(error as Error).message}`);
     throw error;
   }
 }
@@ -93,9 +95,7 @@ async function checkAndInsertNotification(
   const notificationType = changeTypeToNotificationType[field];
 
   if (!notificationType) {
-    console.warn(
-      `No matching notification type found for changeType "${field}"`,
-    );
+    logger.debug(`No notification type found for field "${field}"`);
     return;
   }
 
@@ -108,17 +108,14 @@ async function checkAndInsertNotification(
     .maybeSingle();
 
   if (error) {
-    console.error(
-      `Error checking notification preference for type "${notificationType}"`,
-      error.message,
-    );
+    logger.error(`Failed to check notification preference for ${notificationType}: ${error.message}`);
     return;
   }
 
   // If the notification is enabled, insert a new notification into the notifications table
   const isEnabled = preference?.is_enabled ?? false;
   if (!isEnabled) {
-    console.debug(`🔕 notifications for ${notificationType} are off.`);
+    logger.debug(`Notifications for ${notificationType} are disabled`);
     return;
   }
   const humanFieldName = fieldToHumanName[field] || field;
@@ -132,7 +129,7 @@ async function checkAndInsertNotification(
       `The ${humanFieldName} for your domain has changed from "${oldValue}" to "${newValue}".`;
   }
 
-  console.log(`Inserting notification for ${notificationType}: ${message}`);
+  logger.debug(`Creating ${notificationType} notification: ${message}`);
 
   const { data: _data, error: notificationInsertionError } = await supabase
     .from("notifications")
@@ -146,10 +143,7 @@ async function checkAndInsertNotification(
     });
 
   if (notificationInsertionError) {
-    console.error(
-      "❌ Insertion of notification failed:",
-      notificationInsertionError,
-    );
+    logger.error(`Failed to insert notification: ${notificationInsertionError.message}`);
   }
 }
 
@@ -165,9 +159,7 @@ async function recordDomainChange(
   if (newValue === "Unknown") return;
   if ((oldValue || "").toLowerCase() === (newValue || "").toLowerCase()) return;
   try {
-    console.log(
-      `Domain "${domainId}" "${changeType}" "${field}" from "${oldValue}" to "${newValue}"`,
-    );
+    logger.debug(`Change detected - ${field}: ${oldValue ?? "none"} → ${newValue ?? "none"} (${changeType})`);
     changeCount++;
 
     // Insert domain change into domain_updates
@@ -191,7 +183,7 @@ async function recordDomainChange(
       newValue,
     );
   } catch (error) {
-    console.error(`Error recording domain change: ${error.message}`);
+    logger.error(`Failed to record change for ${field}: ${(error as Error).message}`);
   }
 }
 
@@ -492,7 +484,7 @@ async function updateDomainData(
       }).eq("id", domainId);
     }
   } catch (error) {
-    console.error(`Error updating domain data: ${(error as Error).message}`);
+    logger.error(`Failed to update domain data for ${currentDomain.domain_name}: ${(error as Error).message}`);
   }
 }
 
@@ -516,7 +508,7 @@ serve(async (req) => {
     domain = body.domain;
     user_id = body.user_id;
   } catch (error) {
-    console.error(`Error parsing request body: ${(error as Error).message}`);
+    logger.error(`Failed to parse request body: ${(error as Error).message}`);
     return new Response(
       JSON.stringify({ message: "❌ Invalid request body" }),
       { status: 400 },
@@ -538,6 +530,8 @@ serve(async (req) => {
   }
 
   try {
+    logger.info(`Processing update for ${domain}`);
+
     // Fetch the latest domain info
     const newDomainInfo = await fetchDomainData(domain);
     // Fetch the current domain data
@@ -557,7 +551,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (error) {
-      console.error(`Error fetching domain record: ${error.message}`);
+      logger.error(`Failed to fetch domain record for ${domain}: ${error.message}`);
       return new Response(
         JSON.stringify({
           message: "❌ Error fetching domain record",
@@ -568,6 +562,7 @@ serve(async (req) => {
     }
 
     if (!currentDomainRecord) {
+      logger.warn(`Domain ${domain} not found for user ${user_id}`);
       return new Response(
         JSON.stringify({ message: "❌ Domain not found for user" }),
         { status: 404 },
@@ -582,6 +577,7 @@ serve(async (req) => {
       currentDomainRecord,
     );
 
+    logger.success(`${domain} updated successfully: ${changeCount} change(s)`);
     return new Response(
       JSON.stringify({
         message: `✅ ${domain} updates successfully: ${changeCount} changes.`,
@@ -595,6 +591,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error
       ? error.message
       : "Unknown error";
+    logger.error(`Failed to update ${domain}: ${errorMessage}`);
     return new Response(
       JSON.stringify({
         message: `⚠️ ${domain} could not be updated`,
