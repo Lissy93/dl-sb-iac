@@ -48,7 +48,8 @@ serve(async (req) => {
           last_attempt_at: now.toISOString(),
           attempts: job.attempts + 1,
         })
-        .eq('domain', domain);
+        .eq('domain', domain)
+        .eq('user_id', userId);
 
       if (markErr) {
         logger.error(`Failed to mark job in progress: ${domain}`);
@@ -70,7 +71,8 @@ serve(async (req) => {
           await supabase
             .from('domain_update_jobs')
             .update({ status: 'complete', last_updated_at: new Date().toISOString() })
-            .eq('domain', domain);
+            .eq('domain', domain)
+            .eq('user_id', userId);
           successCount++;
         } else {
           throw new Error(await res.text());
@@ -79,7 +81,8 @@ serve(async (req) => {
         await supabase
           .from('domain_update_jobs')
           .update({ status: 'failed' })
-          .eq('domain', domain);
+          .eq('domain', domain)
+          .eq('user_id', userId);
         failCount++;
         logger.warn(`Job failed: ${domain} - ${(err as Error).message}`);
       }

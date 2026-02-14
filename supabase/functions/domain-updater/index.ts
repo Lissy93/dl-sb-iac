@@ -46,11 +46,16 @@ async function fetchDomainData(domain: string) {
   }
 }
 
+// Sanitize dates: convert empty/invalid to null for safe database storage
+const sanitizeDate = (d: string | null | undefined): string | null =>
+  (!d || d.trim() === "" || isNaN(new Date(d).getTime())) ? null : d;
+
 // Compare dates ignoring time and timezone
 function areDatesEqual(date1: string | null, date2: string | null): boolean {
-  if (!date1 || !date2) return false;
-  return new Date(date1).toISOString().slice(0, 10) ===
-    new Date(date2).toISOString().slice(0, 10);
+  if (!date1 || date1.trim() === "" || !date2 || date2.trim() === "") return false;
+  const d1 = new Date(date1), d2 = new Date(date2);
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return false;
+  return d1.toISOString().slice(0, 10) === d2.toISOString().slice(0, 10);
 }
 
 // Mapping for changeType to notification_type
@@ -402,8 +407,8 @@ async function updateDomainData(
           .from("ssl_certificates")
           .update({
             issuer: domainInfo.ssl.issuer,
-            valid_from: domainInfo.ssl.valid_from,
-            valid_to: domainInfo.ssl.valid_to,
+            valid_from: sanitizeDate(domainInfo.ssl.valid_from),
+            valid_to: sanitizeDate(domainInfo.ssl.valid_to),
           })
           .eq("domain_id", domainId);
       }
@@ -412,8 +417,8 @@ async function updateDomainData(
       await supabase.from("ssl_certificates").insert({
         domain_id: domainId,
         issuer: domainInfo.ssl.issuer,
-        valid_from: domainInfo.ssl.valid_from,
-        valid_to: domainInfo.ssl.valid_to,
+        valid_from: sanitizeDate(domainInfo.ssl.valid_from),
+        valid_to: sanitizeDate(domainInfo.ssl.valid_to),
       });
     }
 
@@ -469,7 +474,7 @@ async function updateDomainData(
         domainInfo.dates.expiry_date,
       );
       await supabase.from("domains").update({
-        expiry_date: domainInfo.dates.expiry_date,
+        expiry_date: sanitizeDate(domainInfo.dates.expiry_date),
       }).eq("id", domainId);
     }
     if (!areDatesEqual(domainInfo.dates.updated_date, currentDomain.updated_date)) {
@@ -482,7 +487,7 @@ async function updateDomainData(
         domainInfo.dates.updated_date,
       );
       await supabase.from("domains").update({
-        updated_date: domainInfo.dates.updated_date,
+        updated_date: sanitizeDate(domainInfo.dates.updated_date),
       }).eq("id", domainId);
     }
   } catch (error) {

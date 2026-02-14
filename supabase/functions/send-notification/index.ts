@@ -33,7 +33,17 @@ serve(async (req) => {
 
   try {
     // Read the userId and notification message from the request body
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (jsonError) {
+      logger.error(`Invalid JSON in request body: ${(jsonError as Error).message}`);
+      return new Response(
+        JSON.stringify({ error: "Invalid or empty request body" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     let userId: string;
     let message: string;
 
